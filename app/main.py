@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 
@@ -13,6 +13,13 @@ class PostCreate(BaseModel):
     tags: list[str]
     notes: str
 
+class PostUpdate(BaseModel):
+    restaurant_name: str | None = None
+    city: str | None = None
+    cuisine: str | None = None
+    rating: int | None = None
+    tags: list[str] | None = None
+    notes: str | None = None
 
 class PostResponse(PostCreate):
     id: UUID
@@ -37,3 +44,42 @@ def create_post(post: PostCreate) -> PostResponse:
     )
     posts.append(new_post)
     return new_post
+
+
+@app.get("/posts")
+def list_posts() -> list[PostResponse]:
+    return posts
+
+
+@app.get("/posts/{post_id}")
+def get_post(post_id: UUID) -> PostResponse:
+    for post in posts:
+        if post.id == post_id:
+            return post
+
+    raise HTTPException(status_code=404, detail="Post not found")
+
+
+@app.patch("/posts/{post_id}")
+def update_post(post_id: UUID, post_update: PostUpdate) -> PostResponse:
+    updates = post_update.model_dump(exclude_unset=True)
+
+    for post in posts:
+        if post.id == post_id:
+            for field, value in updates.items():
+                setattr(post, field, value)
+
+            return post 
+
+    raise HTTPException(status_code=404, detail="Post not found")
+
+
+@app.delete("/posts/{post_id}", status_code=204)
+def delete_post(post_id: UUID):
+    for post in posts:
+        if post.id == post_id:
+            posts.remove(post)
+            return 
+
+    raise HTTPException(status_code=404, detail="Post not found")
+
