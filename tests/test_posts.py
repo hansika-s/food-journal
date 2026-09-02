@@ -117,3 +117,49 @@ def test_delete_missing_post_returns_404() -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Post not found"}
+
+
+# Validation tests
+def test_create_post_rejects_invalid_rating() -> None:
+    response = client.post(
+        "/posts",
+        json={
+            "restaurant_name": "Ramen Nagi",
+            "city": "Berlin",
+            "cuisine": "Japanese",
+            "rating": 6,
+            "tags": ["ramen"],
+            "notes": "Great broth.",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_post_rejects_empty_restaurant_field() -> None:
+    response = client.post(
+        "/posts",
+        json={
+            "restaurant_name": "",
+            "city": "Berlin",
+            "cuisine": "Japanese",
+            "rating": 5,
+            "tags": ["ramen"],
+            "notes": "Great broth.",
+        },
+    )
+
+    assert response.status_code == 422
+
+def test_update_post_rejects_invalid_rating() -> None:
+    create_response = create_test_post()
+    post_id = create_response.json()["id"]
+    
+    update_response = client.patch(
+        f"/posts/{post_id}",
+        json={
+            "rating": 6,
+        },
+    )
+
+    assert update_response.status_code == 422

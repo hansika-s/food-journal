@@ -2,22 +2,22 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PostCreate(BaseModel):
-    restaurant_name: str
-    city: str
-    cuisine: str
-    rating: int
-    tags: list[str]
-    notes: str
+    restaurant_name: str = Field(min_length=1)
+    city: str = Field(min_length=1)
+    cuisine: str = Field(min_length=1)
+    rating: int = Field(ge=1, le=5)
+    tags: list[str] = Field(default_factory=list)
+    notes: str = ""
 
 class PostUpdate(BaseModel):
-    restaurant_name: str | None = None
-    city: str | None = None
-    cuisine: str | None = None
-    rating: int | None = None
+    restaurant_name: str | None = Field(default=None, min_length=1)
+    city: str | None = Field(default=None, min_length=1)
+    cuisine: str | None = Field(default=None, min_length=1)
+    rating: int | None = Field(default=None, ge=1, le=5)
     tags: list[str] | None = None
     notes: str | None = None
 
