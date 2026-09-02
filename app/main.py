@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
 
@@ -35,7 +35,7 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/posts")
+@app.post("/posts", status_code=201)
 def create_post(post: PostCreate) -> PostResponse:
     new_post = PostResponse(
         id=uuid4(),
@@ -47,8 +47,41 @@ def create_post(post: PostCreate) -> PostResponse:
 
 
 @app.get("/posts")
-def list_posts() -> list[PostResponse]:
-    return posts
+def list_posts(
+    city: str | None = None,
+    cuisine: str | None = None,
+    min_rating: int | None = Query(default=None, ge=1, le=5),
+    tag: str | None = None,
+    skip: int = Query(default= 0, ge=0),
+    limit: int = Query(default=10, ge=1, le=100),
+    ) -> list[PostResponse]:
+    filtered_posts = posts
+
+    if city is not None:
+        filtered_posts = [
+            post for post in filtered_posts 
+            if post.city == city
+        ]
+    
+    if cuisine is not None:
+        filtered_posts = [
+            post for post in filtered_posts 
+            if post.cuisine == cuisine
+        ]
+
+    if min_rating is not None:
+        filtered_posts = [
+            post for post in filtered_posts
+            if post.rating >= min_rating
+        ]
+
+    if tag is not None:
+        filtered_posts = [
+            post for post in filtered_posts
+            if tag in post.tags
+        ]
+
+    return filtered_posts[skip: skip + limit]
 
 
 @app.get("/posts/{post_id}")

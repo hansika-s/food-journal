@@ -31,7 +31,7 @@ def test_create_post() -> None:
     response = create_test_post()
     body = response.json()
 
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert body["restaurant_name"] == "Ramen Nagi"
     assert body["rating"] == 5
     assert "id" in body
@@ -43,7 +43,7 @@ def test_list_posts() -> None:
 
     list_response = client.get("/posts")
 
-    assert create_response.status_code == 200
+    assert create_response.status_code == 201
     assert list_response.status_code == 200
     assert create_response.json() in list_response.json()
 
