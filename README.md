@@ -23,7 +23,7 @@ python -m pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Visit http://127.0.0.1:8000/health.
+The API docs are available at http://127.0.0.1:8000/docs.
 
 ## Run tests
 

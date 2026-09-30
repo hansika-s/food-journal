@@ -1,8 +1,13 @@
-from datetime import datetime, timezone
-from uuid import UUID, uuid4
+from datetime import datetime
+from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel, Field
+from fastapi import Depends, FastAPI, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models import Post
 
 
 class PostCreate(BaseModel):
@@ -13,6 +18,7 @@ class PostCreate(BaseModel):
     tags: list[str] = Field(default_factory=list)
     notes: str = ""
 
+
 class PostUpdate(BaseModel):
     restaurant_name: str | None = Field(default=None, min_length=1)
     city: str | None = Field(default=None, min_length=1)
@@ -21,29 +27,27 @@ class PostUpdate(BaseModel):
     tags: list[str] | None = None
     notes: str | None = None
 
+
 class PostResponse(PostCreate):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     created_at: datetime
 
 
 app = FastAPI()
-posts: list[PostResponse] = []
-
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
 
 
 @app.post("/posts", status_code=201)
-def create_post(post: PostCreate) -> PostResponse:
-    new_post = PostResponse(
-        id=uuid4(),
-        created_at=datetime.now(timezone.utc),
-        **post.model_dump(),
-    )
-    posts.append(new_post)
-    return new_post
+def create_post(
+    post: PostCreate,
+    db: Session = Depends(get_db),
+) -> PostResponse:
+    new_post = Post(**post.model_dump())
+    db.add(new_post)
+    db.commit()
+    db.refresh(new_post)
+    return PostResponse.model_validate(new_post)
 
 
 @app.get("/posts")
@@ -52,67 +56,72 @@ def list_posts(
     cuisine: str | None = None,
     min_rating: int | None = Query(default=None, ge=1, le=5),
     tag: str | None = None,
-    skip: int = Query(default= 0, ge=0),
+    skip: int = Query(default=0, ge=0),
     limit: int = Query(default=10, ge=1, le=100),
-    ) -> list[PostResponse]:
-    filtered_posts = posts
+    db: Session = Depends(get_db),
+) -> list[PostResponse]:
+    statement = select(Post)
 
     if city is not None:
-        filtered_posts = [
-            post for post in filtered_posts 
-            if post.city == city
-        ]
-    
+        statement = statement.where(Post.city == city)
+
     if cuisine is not None:
-        filtered_posts = [
-            post for post in filtered_posts 
-            if post.cuisine == cuisine
-        ]
+        statement = statement.where(Post.cuisine == cuisine)
 
     if min_rating is not None:
-        filtered_posts = [
-            post for post in filtered_posts
-            if post.rating >= min_rating
-        ]
+        statement = statement.where(Post.rating >= min_rating)
 
     if tag is not None:
-        filtered_posts = [
-            post for post in filtered_posts
-            if tag in post.tags
-        ]
+        statement = statement.where(Post.tags.contains([tag]))
 
-    return filtered_posts[skip: skip + limit]
+    result = db.scalars(
+        statement.order_by(Post.created_at).offset(skip).limit(limit)
+    ).all()
+    return [PostResponse.model_validate(post) for post in result]
 
 
 @app.get("/posts/{post_id}")
-def get_post(post_id: UUID) -> PostResponse:
-    for post in posts:
-        if post.id == post_id:
-            return post
+def get_post(
+    post_id: UUID,
+    db: Session = Depends(get_db),
+) -> PostResponse:
+    post = db.get(Post, post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
 
-    raise HTTPException(status_code=404, detail="Post not found")
+    return PostResponse.model_validate(post)
 
 
 @app.patch("/posts/{post_id}")
-def update_post(post_id: UUID, post_update: PostUpdate) -> PostResponse:
+def update_post(
+    post_id: UUID,
+    post_update: PostUpdate,
+    db: Session = Depends(get_db),
+) -> PostResponse:
+    post = db.get(Post, post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+
     updates = post_update.model_dump(exclude_unset=True)
+    if any(value is None for value in updates.values()):
+        raise HTTPException(status_code=422, detail="Post fields cannot be null")
 
-    for post in posts:
-        if post.id == post_id:
-            for field, value in updates.items():
-                setattr(post, field, value)
+    for field, value in updates.items():
+        setattr(post, field, value)
 
-            return post 
-
-    raise HTTPException(status_code=404, detail="Post not found")
+    db.commit()
+    db.refresh(post)
+    return PostResponse.model_validate(post)
 
 
 @app.delete("/posts/{post_id}", status_code=204)
-def delete_post(post_id: UUID):
-    for post in posts:
-        if post.id == post_id:
-            posts.remove(post)
-            return 
-
-    raise HTTPException(status_code=404, detail="Post not found")
-
+def delete_post(post_id: UUID, db: Session = Depends(get_db)):
+    post = db.get(Post, post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    
+    db.delete(post)
+    db.commit()
+        
+    
