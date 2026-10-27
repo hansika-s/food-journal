@@ -1,103 +1,44 @@
 # Food Journal
 
-A FastAPI backend for a personal food journal.
+A FastAPI backend for a personal food journal. Posts can be created, listed, read, updated and deleted.
 
 ## Setup
 
-Use Python 3.13, then create and activate a virtual environment:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-Install the dependencies:
-
-```bash
-python -m pip install -r requirements.txt
-```
-
-## Database
-
-The app uses PostgreSQL 18, installed with Homebrew. It runs as your macOS user, so no password is needed.
-
-Install it once, then create the database and the tables:
+Requires Python 3.13 and PostgreSQL 18.
 
 ```bash
 brew install postgresql@18
 brew services start postgresql@18
 createdb food_journal
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
-Create a `.env` file in the project root with the connection string:
+Create `.env` in the project root:
 
 ```bash
 DATABASE_URL=postgresql+psycopg://<your-macos-username>@localhost:5432/food_journal
 ```
 
-Create the tables from the models:
+Create the tables by running the migrations:
 
 ```bash
-.venv/bin/python -c "from app.database import Base, engine; import app.models; Base.metadata.create_all(engine)"
+.venv/bin/alembic upgrade head
 ```
 
-Start the server (it also starts automatically with `./scripts/dev.sh`):
+To change the schema, edit the models in `app/models.py`, then run `.venv/bin/alembic revision --autogenerate -m "describe the change"`. Review the new file in `alembic/versions/`, then run `.venv/bin/alembic upgrade head`.
 
-```bash
-brew services start postgresql@18
-```
-
-Check that it is accepting connections:
-
-```bash
-/opt/homebrew/opt/postgresql@18/bin/pg_isready -h localhost -p 5432
-```
-
-Connect with `psql` and inspect the data:
-
-```bash
-/opt/homebrew/opt/postgresql@18/bin/psql -d food_journal
-```
-
-```sql
-\dt                              -- list tables
-\d posts                         -- show the posts table
-SELECT * FROM posts;             -- show all posts
-\q                               -- quit psql
-```
-
-Stop the server when you are done:
-
-```bash
-brew services stop postgresql@18
-```
-
-Start the database before running the app. Stopping the database also disconnects the app.
-
-## Run locally
-
-Start the database and the app together:
+## Run
 
 ```bash
 ./scripts/dev.sh
 ```
 
-The script starts PostgreSQL if it isn't running, runs the app, and stops PostgreSQL when you quit the app with Ctrl+C.
+The API runs at http://127.0.0.1:8000, with docs at `/docs`.
 
-To run the app without the script, start the database first and then run:
-
-```bash
-uvicorn app.main:app --reload
-```
-
-The API docs are available at http://127.0.0.1:8000/docs.
-
-## Run tests
-
-Tests use the `food_journal_test` database. Create it once with `createdb food_journal_test`, then run:
+## Test
 
 ```bash
-DATABASE_URL=postgresql+psycopg://<your-macos-username>@localhost:5432/food_journal_test python -m pytest
+createdb food_journal_test
+DATABASE_URL=postgresql+psycopg://<your-macos-username>@localhost:5432/food_journal_test .venv/bin/python -m pytest
 ```
-
-The tests refuse to run unless `DATABASE_URL` points at a database whose name ends in `_test`.
