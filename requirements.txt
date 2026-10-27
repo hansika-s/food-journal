@@ -1,7 +1,8 @@
-fastapi
-uvicorn[standard]
-pytest
-httpx
-SQLAlchemy
-psycopg[binary]
-python-dotenv
+alembic==1.20.1
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+pytest==9.1.1
+httpx==0.28.1
+SQLAlchemy==2.1.6
+psycopg[binary]==3.3.6
+python-dotenv==1.2.4
