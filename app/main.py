@@ -2,14 +2,17 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Post
+from app.models import Post, User
+from app.security import hash_password, verify_password
 
 
+# Post schemas
 class PostCreate(BaseModel):
     restaurant_name: str = Field(min_length=1)
     city: str = Field(min_length=1)
@@ -33,6 +36,21 @@ class PostResponse(PostCreate):
 
     id: UUID
     created_at: datetime
+
+
+# User schemas
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8)
+    name: str = Field(min_length=1)
+
+
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    email: str
+    name: str
 
 
 app = FastAPI()
@@ -119,9 +137,27 @@ def delete_post(post_id: UUID, db: Session = Depends(get_db)):
     post = db.get(Post, post_id)
     if post is None:
         raise HTTPException(status_code=404, detail="Post not found")
-    
-    
+
     db.delete(post)
     db.commit()
-        
-    
+
+
+@app.post("/signup", status_code=201)
+def user_signup(
+    user: UserCreate,
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    new_user = User(
+        email=user.email.lower(),
+        password_hash=hash_password(user.password),
+        name=user.name,
+    )
+    db.add(new_user)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Email already registered")
+
+    db.refresh(new_user)
+    return UserResponse.model_validate(new_user)
