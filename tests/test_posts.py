@@ -13,6 +13,9 @@ from app.main import app
 
 client = TestClient(app)
 
+USER = {"email": "post-tester@example.com", "password": "password123", "name": "Post Tester"}
+OTHER_USER = {"email": "other-tester@example.com", "password": "password123", "name": "Other Tester"}
+
 
 # Runs once per test session. Creates the tables, and drops them after all tests finish.
 @pytest.fixture(scope="session", autouse=True)
@@ -25,11 +28,21 @@ def create_tables() -> Iterator[None]:
     Base.metadata.drop_all(engine)
 
 
-# Runs before every test. Empties the posts table so each test starts with no data.
+# Runs before every test. Empties the posts and users tables so each test starts with no data.
 @pytest.fixture(autouse=True)
 def clear_posts() -> None:
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE posts"))
+        connection.execute(text("TRUNCATE posts, users"))
+
+
+# Runs after clear_posts. Signs up and logs in a test user, and sends their token with every request.
+@pytest.fixture(autouse=True)
+def logged_in(clear_posts: None) -> Iterator[None]:
+    client.post("/signup", json=USER)
+    response = client.post("/login", json={"email": USER["email"], "password": USER["password"]})
+    client.headers["Authorization"] = f"Bearer {response.json()['access_token']}"
+    yield
+    client.headers.pop("Authorization", None)
 
 
 def create_test_post() -> Response:
@@ -183,3 +196,17 @@ def test_update_post_rejects_invalid_rating() -> None:
     )
 
     assert update_response.status_code == 422
+
+
+def test_users_cannot_access_each_others_posts() -> None:
+    owner_post = create_test_post().json()
+
+    client.post("/signup", json=OTHER_USER)
+    login = client.post("/login", json={"email": OTHER_USER["email"], "password": OTHER_USER["password"]})
+    client.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
+
+    post_url = f"/posts/{owner_post['id']}"
+    assert client.get(post_url).status_code == 404
+    assert client.patch(post_url, json={"city": "Paris"}).status_code == 404
+    assert client.delete(post_url).status_code == 404
+    assert client.get("/posts").json() == []
