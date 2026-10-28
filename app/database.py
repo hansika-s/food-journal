@@ -8,9 +8,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if DATABASE_URL is None:
-    raise RuntimeError("DATABASE_URL must be set to connect to PostgreSQL")
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 

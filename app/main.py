@@ -1,7 +1,9 @@
 from datetime import datetime
 from uuid import UUID
 
+import jwt
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -9,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Post, User
-from app.security import hash_password, verify_password
+from app.security import create_access_token, decode_access_token, hash_password, verify_password
 
 
 # Post schemas
@@ -51,6 +53,16 @@ class UserResponse(BaseModel):
     id: UUID
     email: str
     name: str
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 
 app = FastAPI()
@@ -161,3 +173,43 @@ def user_signup(
 
     db.refresh(new_user)
     return UserResponse.model_validate(new_user)
+
+
+@app.post("/login")
+def user_login(
+    user: LoginRequest,
+    db: Session = Depends(get_db),
+) -> TokenResponse:
+    db_user = db.scalar(select(User).where(User.email == user.email.lower()))
+    if db_user is None or not verify_password(user.password, db_user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password",
+                            headers={"WWW-Authenticate": "Bearer"})
+
+    access_token = create_access_token(db_user.id)
+    return TokenResponse(access_token=access_token)
+
+
+bearer_scheme = HTTPBearer()
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    try:
+        user_id = decode_access_token(credentials.credentials)
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = db.get(User, UUID(user_id))
+    if user is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
