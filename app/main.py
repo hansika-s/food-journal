@@ -68,12 +68,39 @@ class TokenResponse(BaseModel):
 app = FastAPI()
 
 
+bearer_scheme = HTTPBearer()
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    try:
+        user_id = decode_access_token(credentials.credentials)
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = db.get(User, UUID(user_id))
+    if user is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
 @app.post("/posts", status_code=201)
 def create_post(
     post: PostCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PostResponse:
-    new_post = Post(**post.model_dump())
+    new_post = Post(**post.model_dump(), user_id=current_user.id)
     db.add(new_post)
     db.commit()
     db.refresh(new_post)
@@ -88,9 +115,10 @@ def list_posts(
     tag: str | None = None,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=10, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[PostResponse]:
-    statement = select(Post)
+    statement = select(Post).where(Post.user_id == current_user.id)
 
     if city is not None:
         statement = statement.where(Post.city == city)
@@ -113,9 +141,10 @@ def list_posts(
 @app.get("/posts/{post_id}")
 def get_post(
     post_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PostResponse:
-    post = db.get(Post, post_id)
+    post = db.scalar(select(Post).where(Post.id == post_id, Post.user_id == current_user.id))
     if post is None:
         raise HTTPException(status_code=404, detail="Post not found")
 
@@ -126,9 +155,10 @@ def get_post(
 def update_post(
     post_id: UUID,
     post_update: PostUpdate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PostResponse:
-    post = db.get(Post, post_id)
+    post = db.scalar(select(Post).where(Post.id == post_id, Post.user_id == current_user.id))
     if post is None:
         raise HTTPException(status_code=404, detail="Post not found")
 
@@ -145,8 +175,12 @@ def update_post(
 
 
 @app.delete("/posts/{post_id}", status_code=204)
-def delete_post(post_id: UUID, db: Session = Depends(get_db)):
-    post = db.get(Post, post_id)
+def delete_post(
+    post_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    post = db.scalar(select(Post).where(Post.id == post_id, Post.user_id == current_user.id))
     if post is None:
         raise HTTPException(status_code=404, detail="Post not found")
 
@@ -187,29 +221,3 @@ def user_login(
 
     access_token = create_access_token(db_user.id)
     return TokenResponse(access_token=access_token)
-
-
-bearer_scheme = HTTPBearer()
-
-
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    db: Session = Depends(get_db),
-) -> User:
-    try:
-        user_id = decode_access_token(credentials.credentials)
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    user = db.get(User, UUID(user_id))
-    if user is None:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return user

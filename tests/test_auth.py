@@ -29,7 +29,7 @@ def create_tables() -> Iterator[None]:
 @pytest.fixture(autouse=True)
 def clear_users() -> None:
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE users"))
+        connection.execute(text("TRUNCATE posts, users"))
 
 
 def test_signup_creates_user() -> None:
