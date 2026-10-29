@@ -80,6 +80,16 @@ def test_list_posts() -> None:
     assert create_response.json() in list_response.json()
 
 
+def test_list_newest_posts() -> None:
+    first_post_id = create_test_post().json()["id"]
+    second_post_id = create_test_post().json()["id"]
+
+    list_response = client.get("/posts")
+
+    assert list_response.json()[0]["id"] == second_post_id
+    assert list_response.json()[1]["id"] == first_post_id
+
+
 def test_get_post_by_id() -> None:
     create_response = create_test_post()
 
