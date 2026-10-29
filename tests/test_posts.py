@@ -64,7 +64,7 @@ def test_create_post() -> None:
     body = response.json()
 
     assert response.status_code == 201
-    assert body["restaurant_name"] == "Ramen Nagi"
+    assert body["restaurant"]["name"] == "Ramen Nagi"
     assert body["rating"] == 5
     assert "id" in body
     assert "created_at" in body
@@ -125,9 +125,7 @@ def test_update_post() -> None:
     assert body["rating"] == 4
     assert body["notes"] == "Still good, but not perfect."
 
-    assert body["restaurant_name"] == "Ramen Nagi"
-    assert body["city"] == "Berlin"
-    assert body["cuisine"] == "Japanese"
+    assert body["restaurant"] == {"name": "Ramen Nagi", "city": "Berlin", "cuisine": "Japanese"}
 
 
 def test_update_missing_post_returns_404() -> None:
@@ -217,6 +215,34 @@ def test_users_cannot_access_each_others_posts() -> None:
 
     post_url = f"/posts/{owner_post['id']}"
     assert client.get(post_url).status_code == 404
-    assert client.patch(post_url, json={"city": "Paris"}).status_code == 404
+    assert client.patch(post_url, json={"rating": 1}).status_code == 404
     assert client.delete(post_url).status_code == 404
     assert client.get("/posts").json() == []
+
+
+def count_restaurants() -> int:
+    with engine.connect() as connection:
+        return connection.execute(text("SELECT count(*) FROM restaurants")).scalar()
+
+
+def test_same_restaurant_is_shared_and_keeps_first_cuisine() -> None:
+    first = create_test_post().json()
+    second = client.post(
+        "/posts",
+        json={"restaurant_name": " ramen nagi ", "city": "berlin", "cuisine": "Ramen", "rating": 4},
+    ).json()
+
+    assert second["restaurant"] == first["restaurant"]
+    assert second["restaurant"]["cuisine"] == "Japanese"
+    assert count_restaurants() == 1
+
+
+def test_same_name_in_another_city_is_a_separate_restaurant() -> None:
+    create_test_post()
+
+    client.post(
+        "/posts",
+        json={"restaurant_name": "Ramen Nagi", "city": "Hamburg", "cuisine": "Japanese", "rating": 3},
+    )
+
+    assert count_restaurants() == 2
