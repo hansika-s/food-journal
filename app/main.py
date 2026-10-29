@@ -5,7 +5,7 @@ import jwt
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -133,7 +133,7 @@ def list_posts(
         statement = statement.where(Post.tags.contains([tag]))
 
     result = db.scalars(
-        statement.order_by(Post.created_at).offset(skip).limit(limit)
+        statement.order_by(desc(Post.created_at)).offset(skip).limit(limit)
     ).all()
     return [PostResponse.model_validate(post) for post in result]
 
