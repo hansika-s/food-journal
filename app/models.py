@@ -1,9 +1,16 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
@@ -15,13 +22,28 @@ class Post(Base):
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", name="fk_posts_user_id"))
-    restaurant_name: Mapped[str]
-    city: Mapped[str]
-    cuisine: Mapped[str]
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE", name="fk_posts_user_id")
+    )
+    restaurant_id: Mapped[UUID] = mapped_column(
+        ForeignKey("restaurants.id", name="fk_posts_restaurant_id")
+    )
+    restaurant: Mapped["Restaurant"] = relationship(lazy="joined")
     rating: Mapped[int]
     notes: Mapped[str] = mapped_column(Text, default="")
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class Restaurant(Base):
+    __tablename__ = "restaurants"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    name: Mapped[str]
+    city: Mapped[str]
+    cuisine: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

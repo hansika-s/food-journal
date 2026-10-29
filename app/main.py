@@ -5,12 +5,12 @@ import jwt
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
-from sqlalchemy import select, desc
+from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Post, User
+from app.models import Post, Restaurant, User
 from app.security import create_access_token, decode_access_token, hash_password, verify_password
 
 
@@ -25,18 +25,27 @@ class PostCreate(BaseModel):
 
 
 class PostUpdate(BaseModel):
-    restaurant_name: str | None = Field(default=None, min_length=1)
-    city: str | None = Field(default=None, min_length=1)
-    cuisine: str | None = Field(default=None, min_length=1)
     rating: int | None = Field(default=None, ge=1, le=5)
     tags: list[str] | None = None
     notes: str | None = None
 
 
-class PostResponse(PostCreate):
+class RestaurantResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    city: str
+    cuisine: str
+
+
+class PostResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    restaurant: RestaurantResponse
+    rating: int
+    tags: list[str]
+    notes: str
     created_at: datetime
 
 
@@ -98,13 +107,35 @@ def get_current_user(
     return user
 
 
+def get_or_create_restaurant(db: Session, name: str, city: str, cuisine: str) -> Restaurant:
+    city = city.strip().title()
+    restaurant = db.scalar(
+        select(Restaurant).where(
+            func.lower(func.trim(Restaurant.name)) == name.strip().lower(),
+            Restaurant.city == city,
+        )
+    )
+    if restaurant is None:
+        restaurant = Restaurant(name=name.strip(), city=city, cuisine=cuisine.strip())
+        db.add(restaurant)
+        db.commit()
+    return restaurant
+
+
 @app.post("/posts", status_code=201)
 def create_post(
     post: PostCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PostResponse:
-    new_post = Post(**post.model_dump(), user_id=current_user.id)
+    restaurant = get_or_create_restaurant(db, post.restaurant_name, post.city, post.cuisine)
+    new_post = Post(
+        user_id=current_user.id,
+        restaurant=restaurant,
+        rating=post.rating,
+        tags=post.tags,
+        notes=post.notes,
+    )
     db.add(new_post)
     db.commit()
     db.refresh(new_post)
@@ -122,13 +153,13 @@ def list_posts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[PostResponse]:
-    statement = select(Post).where(Post.user_id == current_user.id)
+    statement = select(Post).join(Post.restaurant).where(Post.user_id == current_user.id)
 
     if city is not None:
-        statement = statement.where(Post.city == city)
+        statement = statement.where(Restaurant.city == city.strip().title())
 
     if cuisine is not None:
-        statement = statement.where(Post.cuisine == cuisine)
+        statement = statement.where(Restaurant.cuisine == cuisine)
 
     if min_rating is not None:
         statement = statement.where(Post.rating >= min_rating)
