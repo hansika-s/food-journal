@@ -65,6 +65,10 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class DeleteAccountRequest(BaseModel):
+    password: str
+
+
 app = FastAPI()
 
 
@@ -221,3 +225,16 @@ def user_login(
 
     access_token = create_access_token(db_user.id)
     return TokenResponse(access_token=access_token)
+
+
+@app.delete("/users/me", status_code=204)
+def delete_current_user(
+    request: DeleteAccountRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not verify_password(request.password, current_user.password_hash):
+        raise HTTPException(status_code=403, detail="Invalid password")
+
+    db.delete(current_user)
+    db.commit()
