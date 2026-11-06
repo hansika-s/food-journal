@@ -4,13 +4,20 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
-from app.schemas.users import DeleteAccountRequest
+from app.schemas.users import DeleteAccountRequest, UserResponse
 from app.security import verify_password
 
 router = APIRouter(
     prefix="/api/users/me",
     tags=["Users"]
 )
+
+
+@router.get("")
+def get_user_profile(
+    current_user: User = Depends(get_current_user),
+) -> UserResponse:
+    return UserResponse.model_validate(current_user)
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)

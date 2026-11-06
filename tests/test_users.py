@@ -19,6 +19,19 @@ def login(client: TestClient, user: dict[str, str]) -> dict[str, str]:
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
+def test_get_user_profile(client: TestClient, logged_in: None, user_data: dict[str, str]) -> None:
+    response = client.get("/api/users/me")
+
+    assert response.status_code == 200
+    assert response.json()["email"] == user_data["email"]
+    assert response.json()["name"] == user_data["name"]
+    assert "password_hash" not in response.json()
+
+
+def test_get_user_profile_requires_token(client: TestClient) -> None:
+    assert client.get("/api/users/me").status_code == 401
+
+
 def test_delete_user_account(client: TestClient, logged_in: None, user_data: dict[str, str]) -> None:
     response = client.request("DELETE", "/api/users/me", json={"password": user_data["password"]})
 
