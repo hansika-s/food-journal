@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
-from app.schemas.users import LoginRequest, TokenResponse, UserCreate, UserResponse
+from app.schemas.users import LoginRequest, RefreshTokenRequest, TokenResponse, UserCreate, UserResponse
 from app.security import create_access_token, hash_password, verify_password
+from app.services.auth import create_refresh_token, revoke_refresh_token, rotate_refresh_token
 
 router = APIRouter(
     prefix="/api/auth",
@@ -46,4 +47,22 @@ def login_user(
                             headers={"WWW-Authenticate": "Bearer"})
 
     access_token = create_access_token(db_user.id)
-    return TokenResponse(access_token=access_token)
+    refresh_token = create_refresh_token(db, db_user.id)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/refresh")
+def refresh_tokens(
+    request: RefreshTokenRequest,
+    db: Session = Depends(get_db),
+) -> TokenResponse:
+    user_id, new_refresh_token = rotate_refresh_token(db, request.refresh_token)
+    return TokenResponse(access_token=create_access_token(user_id), refresh_token=new_refresh_token)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    request: RefreshTokenRequest,
+    db: Session = Depends(get_db),
+):
+    revoke_refresh_token(db, request.refresh_token)
