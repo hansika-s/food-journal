@@ -1,16 +1,12 @@
-import os
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import jwt
-from dotenv import load_dotenv
 from pwdlib import PasswordHash
 
-load_dotenv()
+from app.config import ACCESS_TOKEN_EXPIRE_MINUTES, JWT_SECRET_KEY
 
-JWT_SECRET_KEY = os.environ["JWT_SECRET_KEY"]
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # Argon2 with the library's recommended settings. Created once and reused.
 hasher = PasswordHash.recommended()
