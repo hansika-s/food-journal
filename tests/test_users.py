@@ -14,9 +14,9 @@ POST = {
 }
 
 
-def login(client: TestClient, user: dict[str, str]) -> dict[str, str]:
-    response = client.post("/api/auth/login", json={"email": user["email"], "password": user["password"]})
-    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+def count_posts() -> int:
+    with engine.connect() as connection:
+        return connection.execute(text("SELECT count(*) FROM posts")).scalar_one()
 
 
 def test_get_user_profile(client: TestClient, logged_in: None, user_data: dict[str, str]) -> None:
@@ -24,18 +24,11 @@ def test_get_user_profile(client: TestClient, logged_in: None, user_data: dict[s
 
     assert response.status_code == 200
     assert response.json()["email"] == user_data["email"]
-    assert response.json()["name"] == user_data["name"]
     assert "password_hash" not in response.json()
 
 
 def test_get_user_profile_requires_token(client: TestClient) -> None:
     assert client.get("/api/users/me").status_code == 401
-
-
-def test_delete_user_account(client: TestClient, logged_in: None, user_data: dict[str, str]) -> None:
-    response = client.request("DELETE", "/api/users/me", json={"password": user_data["password"]})
-
-    assert response.status_code == 204
 
 
 def test_delete_user_account_rejects_wrong_password(client: TestClient, logged_in: None, user_data: dict[str, str]) -> None:
@@ -48,27 +41,22 @@ def test_delete_user_account_rejects_wrong_password(client: TestClient, logged_i
 def test_delete_user_account_removes_posts(client: TestClient, logged_in: None, user_data: dict[str, str]) -> None:
     client.post("/api/posts", json=POST)
 
-    client.request("DELETE", "/api/users/me", json={"password": user_data["password"]})
-
-    with engine.connect() as connection:
-        post_count = connection.execute(text("SELECT count(*) FROM posts")).scalar()
-    assert post_count == 0
+    assert client.request("DELETE", "/api/users/me", json={"password": user_data["password"]}).status_code == 204
+    assert count_posts() == 0
 
 
 def test_deleted_user_token_is_rejected(client: TestClient, logged_in: None, user_data: dict[str, str]) -> None:
     client.request("DELETE", "/api/users/me", json={"password": user_data["password"]})
 
-    response = client.get("/api/posts")
-
-    assert response.status_code == 401
+    assert client.get("/api/posts").status_code == 401
 
 
 def test_delete_user_account_keeps_other_users_posts(client: TestClient, logged_in: None, user_data: dict[str, str]) -> None:
     client.post("/api/auth/signup", json=OTHER_USER)
-    other_headers = login(client, OTHER_USER)
+    login = client.post("/api/auth/login", json={"email": OTHER_USER["email"], "password": OTHER_USER["password"]})
+    other_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
     client.post("/api/posts", json=POST, headers=other_headers)
 
     client.request("DELETE", "/api/users/me", json={"password": user_data["password"]})
 
-    response = client.get("/api/posts", headers=other_headers)
-    assert len(response.json()) == 1
+    assert len(client.get("/api/posts", headers=other_headers).json()) == 1

@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block title %}Food journal{% endblock %}
+
+{% block head %}
+  <meta name="csrf-token" content="{{ csrf_token }}">
+{% endblock %}
+
+{% block content %}
+  <style>
+    .actions { display: flex; gap: 0.5rem; align-items: center; }
+    .actions form { margin: 0; }
+    form label { display: block; margin-bottom: 0.75rem; }
+    form label input, form label textarea { display: block; width: 100%; max-width: 24rem; }
+    .post { border-bottom: 1px solid #ddd; padding: 0.75rem 0; }
+    .post p { margin: 0.25rem 0; }
+  </style>
+
+  <h1>Food journal</h1>
+  <div class="actions">
+    <button type="button" id="new-post-button">New post</button>
+    <form method="post" action="/logout">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit">Log out</button>
+    </form>
+  </div>
+
+  <section id="post-form-section" hidden>
+    <h2 id="form-title">New post</h2>
+    <form id="new-post-form">
+      <label>Restaurant <input type="text" name="restaurant_name" required></label>
+      <label>City <input type="text" name="city" required></label>
+      <label>Cuisine <input type="text" name="cuisine" required></label>
+      <label>Rating <input type="number" name="rating" min="1" max="5" required></label>
+      <label>Tags (comma separated) <input type="text" name="tags"></label>
+      <label>Notes <textarea name="notes"></textarea></label>
+      <div class="actions">
+        <button type="submit" id="save-button">Save post</button>
+        <button type="button" id="cancel-edit">Cancel</button>
+      </div>
+    </form>
+  </section>
+
+  <p id="error" style="color: red;"></p>
+
+  <h2>Posts</h2>
+  <ul id="posts"></ul>
+
+  <script>
+    const list = document.getElementById("posts");
+    const errorBox = document.getElementById("error");
+    const formSection = document.getElementById("post-form-section");
+    const form = document.getElementById("new-post-form");
+    const formTitle = document.getElementById("form-title");
+    const saveButton = document.getElementById("save-button");
+    const cancelButton = document.getElementById("cancel-edit");
+    const newPostButton = document.getElementById("new-post-button");
+    const readOnlyFields = ["restaurant_name", "city", "cuisine"];
+    let editingId = null;
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
+    // Headers for requests that change data. The browser already sends the session cookie.
+    function writeHeaders() {
+      return { "Content-Type": "application/json", "X-CSRF-Token": csrfToken };
+    }
+
+    function showError(message) {
+      errorBox.textContent = message;
+    }
+
+    // Builds one post. textContent is used instead of innerHTML so notes can't inject HTML.
+    function renderPost(post) {
+      const item = document.createElement("li");
+      item.className = "post";
+
+      const title = document.createElement("strong");
+      title.textContent = `${post.restaurant.name} (${post.restaurant.city}, ${post.restaurant.cuisine}) - ${post.rating}/5`;
+
+      const tags = document.createElement("p");
+      tags.textContent = post.tags.join(", ");
+
+      const notes = document.createElement("p");
+      notes.textContent = post.notes;
+
+      const edit = document.createElement("button");
+      edit.textContent = "Edit";
+      edit.addEventListener("click", () => startEdit(post));
+
+      const remove = document.createElement("button");
+      remove.textContent = "Delete";
+      remove.addEventListener("click", () => deletePost(post.id));
+
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      actions.append(edit, remove);
+
+      item.append(title, tags, notes, actions);
+      return item;
+    }
+
+    // Opens the form and fills it with a post. The restaurant fields are read-only because PATCH can't change them.
+    function startEdit(post) {
+      editingId = post.id;
+      form.elements["restaurant_name"].value = post.restaurant.name;
+      form.elements["city"].value = post.restaurant.city;
+      form.elements["cuisine"].value = post.restaurant.cuisine;
+      form.elements["rating"].value = post.rating;
+      form.elements["tags"].value = post.tags.join(", ");
+      form.elements["notes"].value = post.notes;
+      for (const name of readOnlyFields) form.elements[name].readOnly = true;
+      formTitle.textContent = "Edit post";
+      saveButton.textContent = "Save changes";
+      formSection.hidden = false;
+      form.scrollIntoView();
+    }
+
+    // Clears the form and hides it.
+    function stopEdit() {
+      editingId = null;
+      form.reset();
+      for (const name of readOnlyFields) form.elements[name].readOnly = false;
+      formTitle.textContent = "New post";
+      saveButton.textContent = "Save post";
+      formSection.hidden = true;
+    }
+
+    newPostButton.addEventListener("click", () => {
+      stopEdit();
+      formSection.hidden = false;
+    });
+
+    async function loadPosts() {
+      const response = await fetch("/api/posts");
+      if (!response.ok) {
+        showError(`Could not load posts (${response.status})`);
+        return;
+      }
+      const posts = await response.json();
+      list.replaceChildren(...posts.map(renderPost));
+    }
+
+    async function deletePost(id) {
+      const response = await fetch(`/api/posts/${id}`, { method: "DELETE", headers: writeHeaders() });
+      if (!response.ok) {
+        showError(`Could not delete post (${response.status})`);
+        return;
+      }
+      await loadPosts();
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+      const tags = data.get("tags").split(",").map((tag) => tag.trim()).filter(Boolean);
+
+      let response;
+      if (editingId === null) {
+        response = await fetch("/api/posts", {
+          method: "POST",
+          headers: writeHeaders(),
+          body: JSON.stringify({
+            restaurant_name: data.get("restaurant_name"),
+            city: data.get("city"),
+            cuisine: data.get("cuisine"),
+            rating: Number(data.get("rating")),
+            tags,
+            notes: data.get("notes"),
+          }),
+        });
+      } else {
+        response = await fetch(`/api/posts/${editingId}`, {
+          method: "PATCH",
+          headers: writeHeaders(),
+          body: JSON.stringify({ rating: Number(data.get("rating")), tags, notes: data.get("notes") }),
+        });
+      }
+
+      if (!response.ok) {
+        showError(`Could not save post (${response.status})`);
+        return;
+      }
+      stopEdit();
+      showError("");
+      await loadPosts();
+    });
+
+    cancelButton.addEventListener("click", stopEdit);
+
+    loadPosts();
+  </script>
+{% endblock %}
