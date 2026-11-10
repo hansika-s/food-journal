@@ -25,7 +25,7 @@ def create_tables() -> Iterator[None]:
 @pytest.fixture(autouse=True)
 def clear_database() -> None:
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE posts, users, restaurants, refresh_tokens"))
+        connection.execute(text("TRUNCATE posts, users, restaurants, refresh_tokens, user_sessions"))
 
 
 # A new client for each test, so headers set in one test don't leak into the next.

@@ -1,13 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
 from app.schemas.users import LoginRequest, RefreshTokenRequest, TokenResponse, UserCreate, UserResponse
-from app.security import create_access_token, hash_password, verify_password
-from app.services.auth import create_refresh_token, revoke_refresh_token, rotate_refresh_token
+from app.security import create_access_token, hash_password
+from app.services.auth import (
+    InvalidRefreshTokenError,
+    authenticate_user,
+    create_refresh_token,
+    revoke_refresh_token,
+    rotate_refresh_token,
+)
 
 router = APIRouter(
     prefix="/api/auth",
@@ -41,8 +46,8 @@ def login_user(
     user: LoginRequest,
     db: Session = Depends(get_db),
 ) -> TokenResponse:
-    db_user = db.scalar(select(User).where(User.email == user.email.lower()))
-    if db_user is None or not verify_password(user.password, db_user.password_hash):
+    db_user = authenticate_user(db, user.email, user.password)
+    if db_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password",
                             headers={"WWW-Authenticate": "Bearer"})
 
@@ -56,7 +61,10 @@ def refresh_tokens(
     request: RefreshTokenRequest,
     db: Session = Depends(get_db),
 ) -> TokenResponse:
-    user_id, new_refresh_token = rotate_refresh_token(db, request.refresh_token)
+    try:
+        user_id, new_refresh_token = rotate_refresh_token(db, request.refresh_token)
+    except InvalidRefreshTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
     return TokenResponse(access_token=create_access_token(user_id), refresh_token=new_refresh_token)
 
 

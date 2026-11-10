@@ -3,12 +3,16 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.config import REFRESH_TOKEN_EXPIRE_DAYS
-from app.models import RefreshToken
+from app.models import RefreshToken, User
+from app.security import verify_password
+
+
+class InvalidRefreshTokenError(Exception):
+    pass
 
 
 # Returns the SHA-256 hex digest of a token. Only this hash is stored.
@@ -40,14 +44,14 @@ def rotate_refresh_token(db: Session, token: str) -> tuple[UUID, str]:
     now = datetime.now(timezone.utc)
 
     if refresh_token is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise InvalidRefreshTokenError()
 
     if refresh_token.revoked_at is not None:
         revoke_all_refresh_tokens(db, refresh_token.user_id)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise InvalidRefreshTokenError()
 
     if refresh_token.expires_at <= now:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise InvalidRefreshTokenError()
 
     refresh_token.revoked_at = now
     new_refresh_token = create_refresh_token(db, refresh_token.user_id)
@@ -72,3 +76,11 @@ def revoke_all_refresh_tokens(db: Session, user_id: UUID) -> None:
         .values(revoked_at=datetime.now(timezone.utc))
     )
     db.commit()
+
+
+# Returns the user if the email and password match, otherwise None. Shared by the JSON and form login routes.
+def authenticate_user(db: Session, email: str, password: str) -> User | None:
+    user = db.scalar(select(User).where(User.email == email.lower()))
+    if user is None or not verify_password(password, user.password_hash):
+        return None
+    return user
