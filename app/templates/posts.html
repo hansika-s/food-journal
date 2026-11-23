@@ -14,6 +14,10 @@
     form label input, form label textarea { display: block; width: 100%; max-width: 24rem; }
     .post { border-bottom: 1px solid #ddd; padding: 0.75rem 0; }
     .post p { margin: 0.25rem 0; }
+    .post-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+    .photos { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0.5rem 0; }
+    .photo { display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem; }
+    .photo img { border-radius: 4px; object-fit: cover; }
   </style>
 
   <h1>Food journal</h1>
@@ -34,6 +38,8 @@
       <label>Rating <input type="number" name="rating" min="1" max="5" required></label>
       <label>Tags (comma separated) <input type="text" name="tags"></label>
       <label>Notes <textarea name="notes"></textarea></label>
+      <div id="existing-photos" class="photos"></div>
+      <label>Photos (up to 5, JPEG, PNG or WebP) <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple></label>
       <div class="actions">
         <button type="submit" id="save-button">Save post</button>
         <button type="button" id="cancel-edit">Cancel</button>
@@ -55,6 +61,7 @@
     const saveButton = document.getElementById("save-button");
     const cancelButton = document.getElementById("cancel-edit");
     const newPostButton = document.getElementById("new-post-button");
+    const existingPhotos = document.getElementById("existing-photos");
     const readOnlyFields = ["restaurant_name", "city", "cuisine"];
     let editingId = null;
 
@@ -67,6 +74,28 @@
 
     function showError(message) {
       errorBox.textContent = message;
+    }
+
+    // One photo. Pass onRemoved to add a Remove button; it gets the photo element after a successful removal.
+    function photoElement(postId, restaurantName, image, onRemoved) {
+      const thumbnail = document.createElement("img");
+      thumbnail.src = `/api/posts/${postId}/images/${image.id}`;
+      thumbnail.alt = `Photo of ${restaurantName}`;
+      thumbnail.width = 120;
+
+      const photo = document.createElement("div");
+      photo.className = "photo";
+      photo.append(thumbnail);
+
+      if (onRemoved) {
+        const removePhoto = document.createElement("button");
+        removePhoto.textContent = "Remove photo";
+        removePhoto.addEventListener("click", async () => {
+          if (await deleteImage(postId, image.id)) onRemoved(photo);
+        });
+        photo.append(removePhoto);
+      }
+      return photo;
     }
 
     // Builds one post. textContent is used instead of innerHTML so notes can't inject HTML.
@@ -95,7 +124,17 @@
       actions.className = "actions";
       actions.append(edit, remove);
 
-      item.append(title, tags, notes, actions);
+      const photos = document.createElement("div");
+      photos.className = "photos";
+      for (const image of post.images) {
+        photos.append(photoElement(post.id, post.restaurant.name, image, null));
+      }
+
+      const header = document.createElement("div");
+      header.className = "post-header";
+      header.append(title, actions);
+
+      item.append(header, tags, notes, photos);
       return item;
     }
 
@@ -109,6 +148,14 @@
       form.elements["tags"].value = post.tags.join(", ");
       form.elements["notes"].value = post.notes;
       for (const name of readOnlyFields) form.elements[name].readOnly = true;
+      existingPhotos.replaceChildren(
+        ...post.images.map((image) =>
+          photoElement(post.id, post.restaurant.name, image, (photo) => {
+            photo.remove();
+            loadPosts();
+          })
+        )
+      );
       formTitle.textContent = "Edit post";
       saveButton.textContent = "Save changes";
       formSection.hidden = false;
@@ -120,6 +167,7 @@
       editingId = null;
       form.reset();
       for (const name of readOnlyFields) form.elements[name].readOnly = false;
+      existingPhotos.replaceChildren();
       formTitle.textContent = "New post";
       saveButton.textContent = "Save post";
       formSection.hidden = true;
@@ -140,6 +188,34 @@
       list.replaceChildren(...posts.map(renderPost));
     }
 
+    // Uploads the photos one after another. A failed upload stops the rest and throws.
+    async function uploadPhotos(postId, files) {
+      for (const file of files) {
+        const body = new FormData();
+        body.append("file", file);
+        const response = await fetch(`/api/posts/${postId}/images`, {
+          method: "POST",
+          headers: { "X-CSRF-Token": csrfToken },
+          body,
+        });
+        if (!response.ok) {
+          throw new Error(`${file.name} (${response.status})`);
+        }
+      }
+    }
+
+    async function deleteImage(postId, imageId) {
+      const response = await fetch(`/api/posts/${postId}/images/${imageId}`, {
+        method: "DELETE",
+        headers: { "X-CSRF-Token": csrfToken },
+      });
+      if (!response.ok) {
+        showError(`Could not remove photo (${response.status})`);
+        return false;
+      }
+      return true;
+    }
+
     async function deletePost(id) {
       const response = await fetch(`/api/posts/${id}`, { method: "DELETE", headers: writeHeaders() });
       if (!response.ok) {
@@ -154,6 +230,7 @@
       const data = new FormData(form);
       const tags = data.get("tags").split(",").map((tag) => tag.trim()).filter(Boolean);
 
+      const selectedPhotos = form.elements["photos"].files;
       let response;
       if (editingId === null) {
         response = await fetch("/api/posts", {
@@ -180,8 +257,15 @@
         showError(`Could not save post (${response.status})`);
         return;
       }
+
+      const postId = editingId === null ? (await response.json()).id : editingId;
+      try {
+        await uploadPhotos(postId, selectedPhotos);
+        showError("");
+      } catch (error) {
+        showError(`Post saved, but a photo failed to upload: ${error.message}`);
+      }
       stopEdit();
-      showError("");
       await loadPosts();
     });
 

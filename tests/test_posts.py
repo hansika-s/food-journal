@@ -2,7 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
+from app.config import MAX_IMAGE_BYTES
 from app.database import engine
+from app.services import images
 
 pytestmark = pytest.mark.usefixtures("logged_in")
 
@@ -139,3 +141,73 @@ def test_same_name_in_another_city_is_a_separate_restaurant(client: TestClient) 
     client.post("/api/posts", json={**POST_BODY, "city": "Hamburg"})
 
     assert count_restaurants() == 2
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 100
+
+
+@pytest.fixture
+def upload_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(images, "UPLOAD_DIR", tmp_path)
+    return tmp_path
+
+
+def upload_image(client: TestClient, post_id: str, data: bytes = PNG):
+    return client.post(f"/api/posts/{post_id}/images", files={"file": ("photo.png", data, "image/png")})
+
+
+def test_upload_image_and_fetch_it(client: TestClient, upload_dir) -> None:
+    post_id = create_test_post(client).json()["id"]
+
+    response = upload_image(client, post_id)
+    image_id = response.json()["images"][0]["id"]
+
+    assert response.status_code == 201
+    assert client.get(f"/api/posts/{post_id}/images/{image_id}").content == PNG
+
+
+def test_upload_rejects_a_file_that_is_not_an_image(client: TestClient, upload_dir) -> None:
+    post_id = create_test_post(client).json()["id"]
+
+    assert upload_image(client, post_id, data=b"not an image").status_code == 422
+
+
+def test_upload_rejects_an_image_over_5_mb(client: TestClient, upload_dir) -> None:
+    post_id = create_test_post(client).json()["id"]
+
+    assert upload_image(client, post_id, data=PNG + b"0" * MAX_IMAGE_BYTES).status_code == 413
+
+
+def test_a_post_takes_at_most_5_images(client: TestClient, upload_dir) -> None:
+    post_id = create_test_post(client).json()["id"]
+    for _ in range(5):
+        upload_image(client, post_id)
+
+    assert upload_image(client, post_id).status_code == 422
+
+
+def test_other_users_cannot_see_or_upload_images(client: TestClient, upload_dir) -> None:
+    post_id = create_test_post(client).json()["id"]
+    image_id = upload_image(client, post_id).json()["images"][0]["id"]
+
+    log_in_as_other_user(client)
+
+    assert client.get(f"/api/posts/{post_id}/images/{image_id}").status_code == 404
+    assert upload_image(client, post_id).status_code == 404
+
+
+def test_delete_image_removes_it_and_its_file(client: TestClient, upload_dir) -> None:
+    post_id = create_test_post(client).json()["id"]
+    image_id = upload_image(client, post_id).json()["images"][0]["id"]
+
+    assert client.delete(f"/api/posts/{post_id}/images/{image_id}").status_code == 204
+    assert list(upload_dir.iterdir()) == []
+
+
+def test_deleting_a_post_removes_its_image_files(client: TestClient, upload_dir) -> None:
+    post_id = create_test_post(client).json()["id"]
+    upload_image(client, post_id)
+
+    client.delete(f"/api/posts/{post_id}")
+
+    assert list(upload_dir.iterdir()) == []

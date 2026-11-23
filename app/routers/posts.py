@@ -1,13 +1,16 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
+from app.config import MAX_IMAGE_BYTES
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Post, Restaurant, User
+from app.models import Post, PostImage, Restaurant, User
 from app.schemas.posts import PostCreate, PostResponse, PostUpdate
+from app.services import images
 from app.services.restaurants import get_or_create_restaurant
 
 router = APIRouter(
@@ -112,5 +115,64 @@ def delete_post(
     if post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
 
+    images.delete_image_files(post.images)
     db.delete(post)
     db.commit()
+
+
+def get_owned_post(db: Session, post_id: UUID, user: User) -> Post:
+    post = db.scalar(select(Post).where(Post.id == post_id, Post.user_id == user.id))
+    if post is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    return post
+
+
+def get_owned_image(db: Session, post_id: UUID, image_id: UUID, user: User) -> PostImage:
+    post = get_owned_post(db, post_id, user)
+    for image in post.images:
+        if image.id == image_id:
+            return image
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+
+
+@router.post("/{post_id}/images", status_code=status.HTTP_201_CREATED)
+async def upload_post_image(
+    post_id: UUID,
+    file: UploadFile,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PostResponse:
+    post = get_owned_post(db, post_id, current_user)
+
+    data = await file.read(MAX_IMAGE_BYTES + 1)
+    if len(data) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail="Image is larger than 5 MB")
+
+    try:
+        images.add_image(db, post, data)
+    except images.ImageError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error))
+
+    return PostResponse.model_validate(post)
+
+
+@router.get("/{post_id}/images/{image_id}")
+def get_post_image(
+    post_id: UUID,
+    image_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    image = get_owned_image(db, post_id, image_id, current_user)
+    return FileResponse(images.image_path(image), media_type=image.content_type)
+
+
+@router.delete("/{post_id}/images/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_post_image(
+    post_id: UUID,
+    image_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    image = get_owned_image(db, post_id, image_id, current_user)
+    images.delete_image(db, image)
