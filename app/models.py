@@ -1,10 +1,12 @@
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Numeric,
     String,
     Text,
     func,
@@ -32,9 +34,9 @@ class Post(Base):
     images: Mapped[list["PostImage"]] = relationship(
         cascade="all, delete-orphan", lazy="selectin", order_by="PostImage.created_at"
     )
-    rating: Mapped[int]
+    rating: Mapped[Decimal] = mapped_column(Numeric(2, 1))
     notes: Mapped[str] = mapped_column(Text, default="")
-    tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    items: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

@@ -35,8 +35,8 @@
       <label>Restaurant <input type="text" name="restaurant_name" required></label>
       <label>City <input type="text" name="city" required></label>
       <label>Cuisine <input type="text" name="cuisine" required></label>
-      <label>Rating <input type="number" name="rating" min="1" max="5" required></label>
-      <label>Tags (comma separated) <input type="text" name="tags"></label>
+      <label>Rating <input type="number" name="rating" min="1" max="5" step="0.1" required></label>
+      <label>What you had (comma separated) <input type="text" name="items"></label>
       <label>Notes <textarea name="notes"></textarea></label>
       <div id="existing-photos" class="photos"></div>
       <label>Photos (up to 5, JPEG, PNG or WebP) <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple></label>
@@ -106,8 +106,8 @@
       const title = document.createElement("strong");
       title.textContent = `${post.restaurant.name} (${post.restaurant.city}, ${post.restaurant.cuisine}) - ${post.rating}/5`;
 
-      const tags = document.createElement("p");
-      tags.textContent = post.tags.join(", ");
+      const items = document.createElement("p");
+      items.textContent = post.items.join(", ");
 
       const notes = document.createElement("p");
       notes.textContent = post.notes;
@@ -134,7 +134,7 @@
       header.className = "post-header";
       header.append(title, actions);
 
-      item.append(header, tags, notes, photos);
+      item.append(header, items, notes, photos);
       return item;
     }
 
@@ -145,7 +145,7 @@
       form.elements["city"].value = post.restaurant.city;
       form.elements["cuisine"].value = post.restaurant.cuisine;
       form.elements["rating"].value = post.rating;
-      form.elements["tags"].value = post.tags.join(", ");
+      form.elements["items"].value = post.items.join(", ");
       form.elements["notes"].value = post.notes;
       for (const name of readOnlyFields) form.elements[name].readOnly = true;
       existingPhotos.replaceChildren(
@@ -228,7 +228,7 @@
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const data = new FormData(form);
-      const tags = data.get("tags").split(",").map((tag) => tag.trim()).filter(Boolean);
+      const items = data.get("items").split(",").map((item) => item.trim()).filter(Boolean);
 
       const selectedPhotos = form.elements["photos"].files;
       let response;
@@ -241,7 +241,7 @@
             city: data.get("city"),
             cuisine: data.get("cuisine"),
             rating: Number(data.get("rating")),
-            tags,
+            items,
             notes: data.get("notes"),
           }),
         });
@@ -249,7 +249,7 @@
         response = await fetch(`/api/posts/${editingId}`, {
           method: "PATCH",
           headers: writeHeaders(),
-          body: JSON.stringify({ rating: Number(data.get("rating")), tags, notes: data.get("notes") }),
+          body: JSON.stringify({ rating: Number(data.get("rating")), items, notes: data.get("notes") }),
         });
       }
 

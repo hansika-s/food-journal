@@ -29,7 +29,7 @@ def create_post(
         user_id=current_user.id,
         restaurant=restaurant,
         rating=post.rating,
-        tags=post.tags,
+        items=post.items,
         notes=post.notes,
     )
     db.add(new_post)
@@ -43,7 +43,7 @@ def list_posts(
     city: str | None = None,
     cuisine: str | None = None,
     min_rating: int | None = Query(default=None, ge=1, le=5),
-    tag: str | None = None,
+    item: str | None = None,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=10, ge=1, le=100),
     current_user: User = Depends(get_current_user),
@@ -60,8 +60,8 @@ def list_posts(
     if min_rating is not None:
         statement = statement.where(Post.rating >= min_rating)
 
-    if tag is not None:
-        statement = statement.where(Post.tags.contains([tag]))
+    if item is not None:
+        statement = statement.where(Post.items.contains([item]))
 
     result = db.scalars(
         statement.order_by(desc(Post.created_at)).offset(skip).limit(limit)

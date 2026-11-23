@@ -1,5 +1,8 @@
+import io
+
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy import text
 
 from app.config import MAX_IMAGE_BYTES
@@ -13,7 +16,7 @@ POST_BODY = {
     "city": "Berlin",
     "cuisine": "Japanese",
     "rating": 5,
-    "tags": ["ramen", "spicy"],
+    "items": ["ramen", "gyoza"],
     "notes": "Great broth.",
 }
 OTHER_USER = {"email": "other-tester@example.com", "password": "password123", "name": "Other Tester"}
@@ -44,6 +47,24 @@ def test_create_post(client: TestClient) -> None:
 
 def test_create_post_rejects_invalid_rating(client: TestClient) -> None:
     assert client.post("/api/posts", json={**POST_BODY, "rating": 6}).status_code == 422
+
+
+def test_rating_accepts_one_decimal_place(client: TestClient) -> None:
+    response = client.post("/api/posts", json={**POST_BODY, "rating": 4.5})
+
+    assert response.status_code == 201
+    assert response.json()["rating"] == 4.5
+
+
+def test_rating_rejects_two_decimal_places(client: TestClient) -> None:
+    assert client.post("/api/posts", json={**POST_BODY, "rating": 4.25}).status_code == 422
+
+
+def test_update_rating_accepts_one_decimal_place(client: TestClient) -> None:
+    post_id = create_test_post(client).json()["id"]
+
+    assert client.patch(f"/api/posts/{post_id}", json={"rating": 3.5}).json()["rating"] == 3.5
+    assert client.patch(f"/api/posts/{post_id}", json={"rating": 3.25}).status_code == 422
 
 
 def test_create_post_rejects_empty_restaurant_name(client: TestClient) -> None:
@@ -143,7 +164,13 @@ def test_same_name_in_another_city_is_a_separate_restaurant(client: TestClient) 
     assert count_restaurants() == 2
 
 
-PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 100
+def make_image(image_format: str = "JPEG", size: tuple[int, int] = (20, 20), exif: Image.Exif | None = None) -> bytes:
+    output = io.BytesIO()
+    Image.new("RGB", size, "orange").save(output, format=image_format, **({"exif": exif} if exif else {}))
+    return output.getvalue()
+
+
+PNG = make_image("PNG")
 
 
 @pytest.fixture
@@ -161,15 +188,56 @@ def test_upload_image_and_fetch_it(client: TestClient, upload_dir) -> None:
 
     response = upload_image(client, post_id)
     image_id = response.json()["images"][0]["id"]
+    fetched = client.get(f"/api/posts/{post_id}/images/{image_id}")
 
     assert response.status_code == 201
-    assert client.get(f"/api/posts/{post_id}/images/{image_id}").content == PNG
+    assert fetched.headers["content-type"] == "image/webp"
+    assert Image.open(io.BytesIO(fetched.content)).format == "WEBP"
+
+
+def test_upload_removes_the_gps_location(client: TestClient, upload_dir) -> None:
+    post_id = create_test_post(client).json()["id"]
+    exif = Image.Exif()
+    gps = exif.get_ifd(0x8825)
+    gps[1] = "N"
+    exif[0x8825] = gps
+
+    upload_image(client, post_id, data=make_image("JPEG", exif=exif))
+
+    stored = next(upload_dir.iterdir())
+    assert 0x8825 not in Image.open(stored).getexif()
+
+
+def test_upload_rotates_the_image_upright(client: TestClient, upload_dir) -> None:
+    post_id = create_test_post(client).json()["id"]
+    exif = Image.Exif()
+    exif[0x0112] = 6  # Stored sideways; the phone rotates it 90 degrees when shown.
+
+    upload_image(client, post_id, data=make_image("JPEG", size=(40, 20), exif=exif))
+
+    stored = next(upload_dir.iterdir())
+    assert Image.open(stored).size == (20, 40)
+
+
+def test_upload_shrinks_large_images(client: TestClient, upload_dir) -> None:
+    post_id = create_test_post(client).json()["id"]
+
+    upload_image(client, post_id, data=make_image("JPEG", size=(3000, 2000)))
+
+    stored = next(upload_dir.iterdir())
+    assert max(Image.open(stored).size) == 1600
 
 
 def test_upload_rejects_a_file_that_is_not_an_image(client: TestClient, upload_dir) -> None:
     post_id = create_test_post(client).json()["id"]
 
     assert upload_image(client, post_id, data=b"not an image").status_code == 422
+
+
+def test_upload_rejects_a_file_with_an_image_header_but_no_image(client: TestClient, upload_dir) -> None:
+    post_id = create_test_post(client).json()["id"]
+
+    assert upload_image(client, post_id, data=b"\x89PNG\r\n\x1a\n" + b"0" * 100).status_code == 422
 
 
 def test_upload_rejects_an_image_over_5_mb(client: TestClient, upload_dir) -> None:
