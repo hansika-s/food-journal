@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -8,14 +9,14 @@ class PostCreate(BaseModel):
     restaurant_name: str = Field(min_length=1)
     city: str = Field(min_length=1)
     cuisine: str = Field(min_length=1)
-    rating: int = Field(ge=1, le=5)
-    tags: list[str] = Field(default_factory=list)
+    rating: Decimal = Field(ge=1, le=5, max_digits=2, decimal_places=1)
+    items: list[str] = Field(default_factory=list)
     notes: str = ""
 
 
 class PostUpdate(BaseModel):
-    rating: int | None = Field(default=None, ge=1, le=5)
-    tags: list[str] | None = None
+    rating: Decimal | None = Field(default=None, ge=1, le=5, max_digits=2, decimal_places=1)
+    items: list[str] | None = None
     notes: str | None = None
 
 
@@ -38,8 +39,8 @@ class PostResponse(BaseModel):
 
     id: UUID
     restaurant: RestaurantResponse
-    rating: int
-    tags: list[str]
+    rating: float
+    items: list[str]
     notes: str
     images: list[PostImageResponse]
     created_at: datetime

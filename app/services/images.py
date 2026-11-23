@@ -1,51 +1,57 @@
+import io
 import uuid
 from pathlib import Path
 from uuid import UUID
 
+from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import MAX_IMAGES_PER_POST, UPLOAD_DIR
 from app.models import Post, PostImage
 
-EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}
+MAX_DIMENSION = 1600
+WEBP_QUALITY = 80
 
 
 class ImageError(Exception):
     pass
 
 
-# Works out the image type from the file's first bytes, not from its name or the type the client sent.
-def detect_image_type(data: bytes) -> str | None:
-    if data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "image/png"
-    if data.startswith(b"\xff\xd8\xff"):
-        return "image/jpeg"
-    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
-        return "image/webp"
-    return None
+# Decodes the upload, rotates it upright, shrinks it and saves it as WebP.
+# Saving only the pixels drops metadata such as the GPS location. Raises ImageError if the file isn't a supported image.
+def process_image(data: bytes) -> bytes:
+    try:
+        with Image.open(io.BytesIO(data)) as source:
+            if source.format not in ALLOWED_FORMATS:
+                raise ImageError("Only JPEG, PNG and WebP images are allowed")
+            image = ImageOps.exif_transpose(source)
+            image.thumbnail((MAX_DIMENSION, MAX_DIMENSION))
+            output = io.BytesIO()
+            image.save(output, format="WEBP", quality=WEBP_QUALITY)
+    except (UnidentifiedImageError, Image.DecompressionBombError, OSError) as error:
+        raise ImageError("Only JPEG, PNG and WebP images are allowed") from error
+    return output.getvalue()
 
 
 def image_path(image: PostImage) -> Path:
     return UPLOAD_DIR / image.filename
 
 
-# Stores the file and adds a row for it. Raises ImageError if the image isn't allowed.
+# Stores the processed file and adds a row for it. Raises ImageError if the image isn't allowed.
 def add_image(db: Session, post: Post, data: bytes) -> PostImage:
     if len(post.images) >= MAX_IMAGES_PER_POST:
         raise ImageError(f"A post can have at most {MAX_IMAGES_PER_POST} images")
 
-    content_type = detect_image_type(data)
-    if content_type is None:
-        raise ImageError("Only JPEG, PNG and WebP images are allowed")
-
+    webp = process_image(data)
     image = PostImage(
         post_id=post.id,
-        filename=f"{uuid.uuid4()}{EXTENSIONS[content_type]}",
-        content_type=content_type,
+        filename=f"{uuid.uuid4()}.webp",
+        content_type="image/webp",
     )
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    image_path(image).write_bytes(data)
+    image_path(image).write_bytes(webp)
     db.add(image)
     db.commit()
     db.refresh(post)

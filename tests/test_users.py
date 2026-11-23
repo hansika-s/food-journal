@@ -9,7 +9,7 @@ POST = {
     "city": "Berlin",
     "cuisine": "Japanese",
     "rating": 5,
-    "tags": ["ramen"],
+    "items": ["ramen"],
     "notes": "Great broth.",
 }
 
