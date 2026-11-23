@@ -45,7 +45,14 @@ def get_current_user(
 
     if request.method not in SAFE_METHODS and not csrf_matches(user_session.csrf_token, csrf_header):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF token missing or invalid")
-    return db.get(User, user_session.user_id)
+    user = db.get(User, user_session.user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
 
 
 def user_from_access_token(db: Session, token: str) -> User:

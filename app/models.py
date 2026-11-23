@@ -29,9 +29,26 @@ class Post(Base):
         ForeignKey("restaurants.id", name="fk_posts_restaurant_id")
     )
     restaurant: Mapped["Restaurant"] = relationship(lazy="joined")
+    images: Mapped[list["PostImage"]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin", order_by="PostImage.created_at"
+    )
     rating: Mapped[int]
     notes: Mapped[str] = mapped_column(Text, default="")
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class PostImage(Base):
+    __tablename__ = "post_images"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    post_id: Mapped[UUID] = mapped_column(
+        ForeignKey("posts.id", ondelete="CASCADE", name="fk_post_images_post_id")
+    )
+    filename: Mapped[str] = mapped_column(unique=True)
+    content_type: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

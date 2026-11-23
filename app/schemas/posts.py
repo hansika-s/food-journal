@@ -27,6 +27,12 @@ class RestaurantResponse(BaseModel):
     cuisine: str
 
 
+class PostImageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+
+
 class PostResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -35,4 +41,5 @@ class PostResponse(BaseModel):
     rating: int
     tags: list[str]
     notes: str
+    images: list[PostImageResponse]
     created_at: datetime

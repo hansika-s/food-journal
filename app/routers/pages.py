@@ -20,12 +20,12 @@ router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).resolve().parent.parent / "templates")
 
 
-@router.get("/login")
+@router.get("/login", include_in_schema=False)
 def show_login_form(request: Request):
     return templates.TemplateResponse(request, "login.html", {"error": None})
 
 
-@router.post("/login")
+@router.post("/login", include_in_schema=False)
 def submit_login_form(
     request: Request,
     email: str = Form(),
@@ -55,12 +55,12 @@ def submit_login_form(
     return response
 
 
-@router.get("/signup")
+@router.get("/signup", include_in_schema=False)
 def show_signup_form(request: Request):
     return templates.TemplateResponse(request, "signup.html", {"error": None})
 
 
-@router.post("/signup")
+@router.post("/signup", include_in_schema=False)
 def submit_signup_form(
     request: Request,
     name: str = Form(),
@@ -93,7 +93,7 @@ def submit_signup_form(
     return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
 
-@router.post("/logout")
+@router.post("/logout", include_in_schema=False)
 def submit_logout_form(
     csrf_token: str | None = Form(default=None),
     session_id: str | None = Cookie(default=None),
@@ -111,7 +111,7 @@ def submit_logout_form(
     return response
 
 
-@router.get("/posts")
+@router.get("/posts", include_in_schema=False)
 def show_posts_page(
     request: Request,
     user_session: UserSession = Depends(get_current_web_session),

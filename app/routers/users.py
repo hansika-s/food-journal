@@ -6,6 +6,7 @@ from app.dependencies import get_current_user
 from app.models import User
 from app.schemas.users import DeleteAccountRequest, UserResponse
 from app.security import verify_password
+from app.services import images
 
 router = APIRouter(
     prefix="/api/users/me",
@@ -29,5 +30,6 @@ def delete_user_account(
     if not verify_password(request.password, current_user.password_hash):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid password")
 
+    images.delete_image_files_for_user(db, current_user.id)
     db.delete(current_user)
     db.commit()

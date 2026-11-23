@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -18,3 +19,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 SESSION_EXPIRE_DAYS = 7
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE") == "true"
+UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
+MAX_IMAGES_PER_POST = 5
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
