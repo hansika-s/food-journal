@@ -88,3 +88,14 @@ def get_current_web_session(
     if user_session is None:
         raise LoginRequiredError()
     return user_session
+
+
+# For JSON routes: returns the session from the cookie, or 401. Unlike get_current_web_session, it never redirects.
+def get_cookie_session(
+    session_id: str | None = Cookie(default=None),
+    db: Session = Depends(get_db),
+) -> UserSession:
+    user_session = sessions.get_session(db, session_id) if session_id is not None else None
+    if user_session is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not logged in")
+    return user_session
