@@ -126,3 +126,49 @@ def test_posts_page_redirects_when_logged_out(client: TestClient) -> None:
     response = client.get("/posts", follow_redirects=False)
 
     assert response.headers["location"] == "/login"
+
+
+def test_api_login_sets_session_cookie_and_returns_csrf_token(client: TestClient) -> None:
+    client.post("/api/auth/signup", json=USER)
+
+    response = client.post("/api/auth/login", json={"email": USER["email"], "password": USER["password"]})
+
+    assert "session_id" in response.cookies
+    assert response.json()["csrf_token"]
+
+
+def test_session_endpoint_needs_a_cookie(client: TestClient) -> None:
+    assert client.get("/api/auth/session").status_code == 401
+
+
+def test_session_endpoint_returns_user_and_csrf_token(client: TestClient) -> None:
+    login = sign_up_and_log_in(client)
+
+    response = client.get("/api/auth/session")
+
+    assert response.status_code == 200
+    assert response.json()["user"]["email"] == USER["email"]
+    assert response.json()["csrf_token"] == login["csrf_token"]
+
+
+def test_api_cookie_write_needs_csrf_token(client: TestClient) -> None:
+    login = sign_up_and_log_in(client)
+
+    assert client.post("/api/posts", json=POST_BODY).status_code == 403
+    assert client.post("/api/posts", json=POST_BODY, headers={"X-CSRF-Token": login["csrf_token"]}).status_code == 201
+
+
+def test_api_logout_ends_the_cookie_session(client: TestClient) -> None:
+    login = sign_up_and_log_in(client)
+
+    response = client.post("/api/auth/logout", headers={"X-CSRF-Token": login["csrf_token"]})
+
+    assert response.status_code == 204
+    assert client.get("/api/auth/session").status_code == 401
+
+
+def test_api_logout_with_cookie_needs_csrf_token(client: TestClient) -> None:
+    sign_up_and_log_in(client)
+
+    assert client.post("/api/auth/logout").status_code == 403
+    assert client.get("/api/auth/session").status_code == 200

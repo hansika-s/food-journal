@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
 
-from app.config import COOKIE_SECURE, SESSION_EXPIRE_DAYS
+from app.cookies import delete_session_cookie, set_session_cookie
 from app.database import get_db
 from app.dependencies import csrf_matches, get_current_web_session
 from app.models import User, UserSession
@@ -41,17 +41,10 @@ def submit_login_form(
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
-    session_id = sessions.create_session(db, db_user.id)
+    session_id, _ = sessions.create_session(db, db_user.id)
 
     response = RedirectResponse(url="/posts", status_code=status.HTTP_303_SEE_OTHER)
-    response.set_cookie(
-        key="session_id",
-        value=session_id,
-        httponly=True,
-        samesite="lax",
-        secure=COOKIE_SECURE,
-        max_age=SESSION_EXPIRE_DAYS * 24 * 60 * 60,
-    )
+    set_session_cookie(response, session_id)
     return response
 
 
@@ -106,7 +99,7 @@ def submit_logout_form(
         sessions.delete_session(db, session_id)
 
     response = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-    response.delete_cookie("session_id")
+    delete_session_cookie(response)
 
     return response
 

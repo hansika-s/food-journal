@@ -28,6 +28,15 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class LoginResponse(TokenResponse):
+    csrf_token: str
+
+
+class SessionResponse(BaseModel):
+    user: UserResponse
+    csrf_token: str
+
+
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 

@@ -15,19 +15,20 @@ def hash_session_id(session_id: str) -> str:
     return hashlib.sha256(session_id.encode()).hexdigest()
 
 
-# Creates a session for the user and returns the raw session ID, which goes in the cookie.
-def create_session(db: Session, user_id: UUID) -> str:
+# Creates a session for the user. Returns the raw session ID (for the cookie) and the CSRF token (for the client).
+def create_session(db: Session, user_id: UUID) -> tuple[str, str]:
     session_id = secrets.token_urlsafe(32)
+    csrf_token = secrets.token_urlsafe(32)
     db.add(
         UserSession(
             user_id=user_id,
             session_hash=hash_session_id(session_id),
-            csrf_token=secrets.token_urlsafe(32),
+            csrf_token=csrf_token,
             expires_at=datetime.now(timezone.utc) + timedelta(days=SESSION_EXPIRE_DAYS),
         )
     )
     db.commit()
-    return session_id
+    return session_id, csrf_token
 
 
 # Returns the session row for a valid session ID, or None if the session is unknown or expired.
