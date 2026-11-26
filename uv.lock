@@ -531,6 +531,7 @@ dependencies = [
     { name = "alembic" },
     { name = "email-validator" },
     { name = "fastapi", extra = ["standard"] },
+    { name = "httpx" },
     { name = "pillow" },
     { name = "pillow-heif" },
     { name = "psycopg", extra = ["binary"] },
@@ -542,7 +543,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "pytest" },
 ]
 
@@ -551,6 +551,7 @@ requires-dist = [
     { name = "alembic", specifier = "==1.20.1" },
     { name = "email-validator", specifier = "==2.3.0" },
     { name = "fastapi", extras = ["standard"], specifier = "==0.162.0" },
+    { name = "httpx", specifier = "==0.28.1" },
     { name = "pillow", specifier = "==13.0.0" },
     { name = "pillow-heif", specifier = "==1.9.0" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.6" },
@@ -561,10 +562,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "httpx", specifier = "==0.28.1" },
-    { name = "pytest", specifier = "==9.1.1" },
-]
+dev = [{ name = "pytest", specifier = "==9.1.1" }]
 
 [[package]]
 name = "googleapis-common-protos"

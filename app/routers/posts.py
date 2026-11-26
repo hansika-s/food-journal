@@ -11,6 +11,7 @@ from app.dependencies import get_current_user
 from app.models import Post, PostImage, Restaurant, User
 from app.schemas.posts import PostCreate, PostResponse, PostUpdate
 from app.services import images
+from app.services import restaurants
 from app.services.restaurants import get_or_create_restaurant
 
 router = APIRouter(
@@ -24,7 +25,7 @@ def create_post(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PostResponse:
-    restaurant = get_or_create_restaurant(db, post.restaurant_name, post.city, post.cuisine)
+    restaurant = get_or_create_restaurant(db, post.restaurant_name, post.city, post.cuisine, post.place_id)
     new_post = Post(
         user_id=current_user.id,
         restaurant=restaurant,
@@ -94,22 +95,28 @@ def update_post(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
 
     updates = post_update.model_dump(exclude_unset=True)
+    # An edit that didn't pick a place sends no place ID. That means "keep the restaurant", not an error.
+    if updates.get("place_id") is None:
+        updates.pop("place_id", None)
     if any(value is None for value in updates.values()):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Post fields cannot be null")
 
     # Changing the restaurant means pointing the post at the matching restaurant record. The record itself isn't
     # renamed, so other posts keep their restaurant. Fields that weren't sent keep their current value.
-    if updates.keys() & {"restaurant_name", "city", "cuisine"}:
+    old_restaurant_id = post.restaurant_id
+    if updates.keys() & {"restaurant_name", "city", "cuisine", "place_id"}:
         name = updates.pop("restaurant_name", post.restaurant.name)
         city = updates.pop("city", post.restaurant.city)
         cuisine = updates.pop("cuisine", post.restaurant.cuisine)
-        post.restaurant = get_or_create_restaurant(db, name, city, cuisine)
+        place_id = updates.pop("place_id", None)
+        post.restaurant = get_or_create_restaurant(db, name, city, cuisine, place_id)
 
     for field, value in updates.items():
         setattr(post, field, value)
 
     db.commit()
     db.refresh(post)
+    restaurants.delete_unused_restaurants(db, {old_restaurant_id})
     return PostResponse.model_validate(post)
 
 
@@ -123,9 +130,11 @@ def delete_post(
     if post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
 
+    restaurant_id = post.restaurant_id
     images.delete_image_files(post.images)
     db.delete(post)
     db.commit()
+    restaurants.delete_unused_restaurants(db, {restaurant_id})
 
 
 def get_owned_post(db: Session, post_id: UUID, user: User) -> Post:

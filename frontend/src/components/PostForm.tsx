@@ -12,20 +12,24 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { RatingStars } from '@/components/RatingStars'
+import { RatingInput } from '@/components/RatingInput'
+import { RestaurantSearch, type Place } from '@/components/RestaurantSearch'
+import { cuisineFromTypes } from '@/lib/cuisine'
 
 const MAX_PHOTOS = 5
 
-// Creates a post when `post` is missing, or edits the given post. The restaurant fields can't be changed when editing.
+// Creates a post when `post` is missing, or edits the given post.
 export function PostForm({ post, onDone }: { post?: Post; onDone: () => void }) {
   const createPost = useCreatePost()
   const updatePost = useUpdatePost()
   const deletePhoto = useDeletePhoto()
 
   const [restaurantName, setRestaurantName] = useState(post?.restaurant.name ?? '')
+  // The Google place picked from the search. Cleared when the name is typed by hand.
+  const [placeId, setPlaceId] = useState<string | null>(null)
   const [city, setCity] = useState(post?.restaurant.city ?? '')
   const [cuisine, setCuisine] = useState(post?.restaurant.cuisine ?? '')
-  const [rating, setRating] = useState(post ? String(post.rating) : '')
+  const [rating, setRating] = useState<number | null>(post?.rating ?? null)
   const [items, setItems] = useState(post ? post.items.join(', ') : '')
   const [notes, setNotes] = useState(post?.notes ?? '')
   const [files, setFiles] = useState<File[]>([])
@@ -34,8 +38,21 @@ export function PostForm({ post, onDone }: { post?: Post; onDone: () => void }) 
 
   const existingPhotos = post?.images ?? []
 
+  // Fills the city and cuisine from the picked place. Anything the place doesn't tell us stays as it was.
+  function pickPlace(place: Place) {
+    setRestaurantName(place.name)
+    setPlaceId(place.place_id)
+    if (place.city) setCity(place.city)
+    const guessedCuisine = cuisineFromTypes(place.types)
+    if (guessedCuisine) setCuisine(guessedCuisine)
+  }
+
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (rating === null) {
+      setError('Tap the stars to rate the place')
+      return
+    }
     if (existingPhotos.length + files.length > MAX_PHOTOS) {
       setError(`A post can have at most ${MAX_PHOTOS} photos`)
       return
@@ -47,14 +64,15 @@ export function PostForm({ post, onDone }: { post?: Post; onDone: () => void }) 
     try {
       let postId: string
       if (post) {
-        await updatePost.mutateAsync({ id: post.id, changes: { restaurant_name: restaurantName, city, cuisine, rating: Number(rating), items: itemList, notes } })
+        await updatePost.mutateAsync({ id: post.id, changes: { restaurant_name: restaurantName, city, cuisine, place_id: placeId, rating, items: itemList, notes } })
         postId = post.id
       } else {
         const created = await createPost.mutateAsync({
           restaurant_name: restaurantName,
           city,
           cuisine,
-          rating: Number(rating),
+          place_id: placeId,
+          rating,
           items: itemList,
           notes,
         })
@@ -82,7 +100,14 @@ export function PostForm({ post, onDone }: { post?: Post; onDone: () => void }) 
         <CardContent className="grid gap-5 sm:grid-cols-2">
           <div className="flex flex-col gap-2 sm:col-span-2">
             <Label htmlFor="restaurant">Restaurant</Label>
-            <Input id="restaurant" required value={restaurantName} onChange={(event) => setRestaurantName(event.target.value)} />
+            <RestaurantSearch
+              value={restaurantName}
+              onChange={(text) => {
+                setRestaurantName(text)
+                setPlaceId(null)
+              }}
+              onPick={pickPlace}
+            />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="city">City</Label>
@@ -92,10 +117,9 @@ export function PostForm({ post, onDone }: { post?: Post; onDone: () => void }) 
             <Label htmlFor="cuisine">Cuisine</Label>
             <Input id="cuisine" required value={cuisine} onChange={(event) => setCuisine(event.target.value)} />
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="rating">Rating</Label>
-            <Input id="rating" type="number" min="1" max="5" step="0.1" required value={rating} onChange={(event) => setRating(event.target.value)} />
-            {Number(rating) >= 1 && Number(rating) <= 5 && <RatingStars value={Number(rating)} />}
+          <div className="flex flex-col gap-2 sm:col-span-2">
+            <Label>Your rating</Label>
+            <RatingInput value={rating} onChange={setRating} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="items">What you had</Label>
@@ -126,15 +150,10 @@ export function PostForm({ post, onDone }: { post?: Post; onDone: () => void }) 
                 ))}
               </div>
             )}
-            <Input
-              id="photos"
-              type="file"
-              multiple
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-              onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
-            />
+            {/* On a phone, "image/*" lets the user take a new photo with the camera or pick from the library. */}
+            <Input id="photos" type="file" multiple accept="image/*" onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
             <p className="text-sm text-muted-foreground">
-              Up to {MAX_PHOTOS} photos, JPEG, PNG or WebP.
+              Take a photo or choose from your library. Up to {MAX_PHOTOS} photos.
               {files.length > 0 && ` ${files.length} selected.`}
             </p>
           </div>

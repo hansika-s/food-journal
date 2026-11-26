@@ -179,6 +179,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/places/autocomplete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Autocomplete */
+        get: operations["autocomplete_api_places_autocomplete_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/places/details/{place_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Details */
+        get: operations["details_api_places_details__place_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/places/nearby": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Nearby */
+        get: operations["nearby_api_places_nearby_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -222,6 +273,19 @@ export interface components {
             /** Csrf Token */
             csrf_token: string;
         };
+        /** PlaceResult */
+        PlaceResult: {
+            /** Place Id */
+            place_id: string;
+            /** Name */
+            name: string;
+            /** Address */
+            address: string;
+            /** City */
+            city: string | null;
+            /** Types */
+            types: string[];
+        };
         /** PostCreate */
         PostCreate: {
             /** Restaurant Name */
@@ -230,6 +294,8 @@ export interface components {
             city: string;
             /** Cuisine */
             cuisine: string;
+            /** Place Id */
+            place_id?: string | null;
             /** Rating */
             rating: number | string;
             /** Items */
@@ -278,6 +344,8 @@ export interface components {
             city?: string | null;
             /** Cuisine */
             cuisine?: string | null;
+            /** Place Id */
+            place_id?: string | null;
             /** Rating */
             rating?: number | string | null;
             /** Items */
@@ -304,6 +372,15 @@ export interface components {
             user: components["schemas"]["UserResponse"];
             /** Csrf Token */
             csrf_token: string;
+        };
+        /** Suggestion */
+        Suggestion: {
+            /** Place Id */
+            place_id: string;
+            /** Name */
+            name: string;
+            /** Address */
+            address: string;
         };
         /** TokenResponse */
         TokenResponse: {
@@ -877,6 +954,117 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    autocomplete_api_places_autocomplete_get: {
+        parameters: {
+            query: {
+                q: string;
+                session?: string | null;
+                lat?: number | null;
+                lng?: number | null;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suggestion"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    details_api_places_details__place_id__get: {
+        parameters: {
+            query?: {
+                session?: string | null;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                place_id: string;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaceResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    nearby_api_places_nearby_get: {
+        parameters: {
+            query: {
+                lat: number;
+                lng: number;
+            };
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaceResult"][];
+                };
             };
             /** @description Validation Error */
             422: {
