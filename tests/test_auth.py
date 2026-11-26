@@ -1,4 +1,3 @@
-import re
 from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
@@ -15,16 +14,6 @@ def sign_up_and_log_in(client: TestClient) -> dict[str, str]:
     client.post("/api/auth/signup", json=USER)
     response = client.post("/api/auth/login", json={"email": USER["email"], "password": USER["password"]})
     return response.json()
-
-
-def log_in_with_form(client: TestClient) -> None:
-    client.post("/login", data={"email": USER["email"], "password": USER["password"]})
-
-
-def csrf_token(client: TestClient) -> str:
-    match = re.search(r'name="csrf-token" content="([^"]+)"', client.get("/posts").text)
-    assert match is not None
-    return match.group(1)
 
 
 def test_signup_creates_user(client: TestClient) -> None:
@@ -103,29 +92,6 @@ def test_logout_revokes_the_refresh_token(client: TestClient) -> None:
     refresh_response = client.post("/api/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
 
     assert refresh_response.status_code == 401
-
-
-def test_browser_write_needs_csrf_token(client: TestClient) -> None:
-    client.post("/api/auth/signup", json=USER)
-    log_in_with_form(client)
-
-    assert client.post("/api/posts", json=POST_BODY).status_code == 403
-    assert client.post("/api/posts", json=POST_BODY, headers={"X-CSRF-Token": csrf_token(client)}).status_code == 201
-
-
-def test_logout_ends_browser_session(client: TestClient) -> None:
-    client.post("/api/auth/signup", json=USER)
-    log_in_with_form(client)
-
-    client.post("/logout", data={"csrf_token": csrf_token(client)})
-
-    assert client.get("/api/posts").status_code == 401
-
-
-def test_posts_page_redirects_when_logged_out(client: TestClient) -> None:
-    response = client.get("/posts", follow_redirects=False)
-
-    assert response.headers["location"] == "/login"
 
 
 def test_api_login_sets_session_cookie_and_returns_csrf_token(client: TestClient) -> None:

@@ -4,13 +4,18 @@ from pathlib import Path
 from uuid import UUID
 
 from PIL import Image, ImageOps, UnidentifiedImageError
+from pillow_heif import register_heif_opener
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import MAX_IMAGES_PER_POST, UPLOAD_DIR
 from app.models import Post, PostImage
 
-ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}
+# Lets Pillow open HEIC photos, which iPhones save by default.
+register_heif_opener()
+
+# MPO is how iPhones store JPEGs: a normal JPEG plus extra pictures. Only the main picture is kept.
+ALLOWED_FORMATS = {"JPEG", "MPO", "PNG", "WEBP", "HEIF"}
 MAX_DIMENSION = 1600
 WEBP_QUALITY = 80
 

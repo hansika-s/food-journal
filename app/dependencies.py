@@ -17,12 +17,6 @@ bearer_scheme = HTTPBearer(auto_error=False)
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
-# Raised when a browser page needs a logged-in user and there isn't one.
-# main.py turns this into a redirect to /login.
-class LoginRequiredError(Exception):
-    pass
-
-
 # Accepts a bearer token (API clients) or the session cookie (browsers).
 # Cookie requests that change data must also send the session's CSRF token in the X-CSRF-Token header.
 def get_current_user(
@@ -80,17 +74,7 @@ def csrf_matches(expected: str, given: str | None) -> bool:
     return given is not None and secrets.compare_digest(expected, given)
 
 
-def get_current_web_session(
-    session_id: str | None = Cookie(default=None),
-    db: Session = Depends(get_db),
-) -> UserSession:
-    user_session = sessions.get_session(db, session_id) if session_id is not None else None
-    if user_session is None:
-        raise LoginRequiredError()
-    return user_session
-
-
-# For JSON routes: returns the session from the cookie, or 401. Unlike get_current_web_session, it never redirects.
+# Returns the session from the session cookie, or 401.
 def get_cookie_session(
     session_id: str | None = Cookie(default=None),
     db: Session = Depends(get_db),

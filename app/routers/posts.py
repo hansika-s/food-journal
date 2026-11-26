@@ -97,6 +97,14 @@ def update_post(
     if any(value is None for value in updates.values()):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Post fields cannot be null")
 
+    # Changing the restaurant means pointing the post at the matching restaurant record. The record itself isn't
+    # renamed, so other posts keep their restaurant. Fields that weren't sent keep their current value.
+    if updates.keys() & {"restaurant_name", "city", "cuisine"}:
+        name = updates.pop("restaurant_name", post.restaurant.name)
+        city = updates.pop("city", post.restaurant.city)
+        cuisine = updates.pop("cuisine", post.restaurant.cuisine)
+        post.restaurant = get_or_create_restaurant(db, name, city, cuisine)
+
     for field, value in updates.items():
         setattr(post, field, value)
 
