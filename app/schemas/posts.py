@@ -9,6 +9,7 @@ class PostCreate(BaseModel):
     restaurant_name: str = Field(min_length=1)
     city: str = Field(min_length=1)
     cuisine: str = Field(min_length=1)
+    place_id: str | None = Field(default=None, max_length=200)
     rating: Decimal = Field(ge=1, le=5, max_digits=2, decimal_places=1)
     items: list[str] = Field(default_factory=list)
     notes: str = ""
@@ -18,6 +19,7 @@ class PostUpdate(BaseModel):
     restaurant_name: str | None = Field(default=None, min_length=1)
     city: str | None = Field(default=None, min_length=1)
     cuisine: str | None = Field(default=None, min_length=1)
+    place_id: str | None = Field(default=None, max_length=200)
     rating: Decimal | None = Field(default=None, ge=1, le=5, max_digits=2, decimal_places=1)
     items: list[str] | None = None
     notes: str | None = None

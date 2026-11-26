@@ -144,6 +144,15 @@ def test_changing_the_restaurant_leaves_other_posts_alone(client: TestClient) ->
     assert client.get(f"/api/posts/{second_id}").json()["restaurant"]["name"] == "Ramen Nagi"
 
 
+def test_edit_sends_no_place_id_when_none_was_picked(client: TestClient) -> None:
+    post_id = create_test_post(client).json()["id"]
+
+    response = client.patch(f"/api/posts/{post_id}", json={"rating": 4, "place_id": None})
+
+    assert response.status_code == 200
+    assert response.json()["rating"] == 4
+
+
 def test_update_rejects_an_empty_restaurant_name(client: TestClient) -> None:
     post_id = create_test_post(client).json()["id"]
 
@@ -180,6 +189,33 @@ def test_same_restaurant_is_shared(client: TestClient) -> None:
 
     assert second["restaurant"] == first["restaurant"]
     assert count_restaurants() == 1
+
+
+def test_same_google_place_is_one_restaurant_even_with_another_name(client: TestClient) -> None:
+    first = client.post("/api/posts", json={**POST_BODY, "place_id": "place-1"}).json()
+    second = client.post(
+        "/api/posts", json={**POST_BODY, "restaurant_name": "Ramen Nagi Berlin", "place_id": "place-1"}
+    ).json()
+
+    assert second["restaurant"]["name"] == "Ramen Nagi"
+    assert count_restaurants() == 1
+    assert first["id"] != second["id"]
+
+
+def test_two_google_places_with_the_same_name_stay_separate(client: TestClient) -> None:
+    client.post("/api/posts", json={**POST_BODY, "place_id": "place-1"})
+    client.post("/api/posts", json={**POST_BODY, "place_id": "place-2"})
+
+    assert count_restaurants() == 2
+
+
+def test_a_place_id_is_added_to_a_restaurant_found_by_name(client: TestClient) -> None:
+    client.post("/api/posts", json=POST_BODY)
+    client.post("/api/posts", json={**POST_BODY, "place_id": "place-1"})
+
+    assert count_restaurants() == 1
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT google_place_id FROM restaurants")).scalar_one() == "place-1"
 
 
 def test_same_name_in_another_city_is_a_separate_restaurant(client: TestClient) -> None:

@@ -22,3 +22,5 @@ COOKIE_SECURE = os.environ.get("COOKIE_SECURE") == "true"
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 MAX_IMAGES_PER_POST = 5
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
+# Optional: restaurant search is unavailable without it, but the rest of the app still works.
+GOOGLE_PLACES_API_KEY = os.environ.get("GOOGLE_PLACES_API_KEY")

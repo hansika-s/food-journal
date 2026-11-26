@@ -63,6 +63,8 @@ class Restaurant(Base):
     name: Mapped[str]
     city: Mapped[str]
     cuisine: Mapped[str]
+    # Google's ID for the place. Empty for restaurants typed in by hand.
+    google_place_id: Mapped[str | None] = mapped_column(unique=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
