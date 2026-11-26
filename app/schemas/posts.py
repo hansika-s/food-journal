@@ -15,6 +15,9 @@ class PostCreate(BaseModel):
 
 
 class PostUpdate(BaseModel):
+    restaurant_name: str | None = Field(default=None, min_length=1)
+    city: str | None = Field(default=None, min_length=1)
+    cuisine: str | None = Field(default=None, min_length=1)
     rating: Decimal | None = Field(default=None, ge=1, le=5, max_digits=2, decimal_places=1)
     items: list[str] | None = None
     notes: str | None = None

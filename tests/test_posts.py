@@ -124,6 +124,32 @@ def test_update_missing_post_returns_404(client: TestClient) -> None:
     assert client.patch(f"/api/posts/{MISSING_ID}", json={"rating": 4}).status_code == 404
 
 
+def test_update_can_change_the_restaurant(client: TestClient) -> None:
+    post_id = create_test_post(client).json()["id"]
+
+    response = client.patch(f"/api/posts/{post_id}", json={"restaurant_name": "Sushi Bar", "city": "Hamburg"})
+
+    assert response.status_code == 200
+    assert response.json()["restaurant"]["name"] == "Sushi Bar"
+    assert response.json()["restaurant"]["city"] == "Hamburg"
+    assert response.json()["restaurant"]["cuisine"] == "Japanese"
+
+
+def test_changing_the_restaurant_leaves_other_posts_alone(client: TestClient) -> None:
+    first_id = create_test_post(client).json()["id"]
+    second_id = create_test_post(client).json()["id"]
+
+    client.patch(f"/api/posts/{first_id}", json={"restaurant_name": "Sushi Bar"})
+
+    assert client.get(f"/api/posts/{second_id}").json()["restaurant"]["name"] == "Ramen Nagi"
+
+
+def test_update_rejects_an_empty_restaurant_name(client: TestClient) -> None:
+    post_id = create_test_post(client).json()["id"]
+
+    assert client.patch(f"/api/posts/{post_id}", json={"restaurant_name": ""}).status_code == 422
+
+
 def test_delete_post(client: TestClient) -> None:
     post_id = create_test_post(client).json()["id"]
 
@@ -193,6 +219,16 @@ def test_upload_image_and_fetch_it(client: TestClient, upload_dir) -> None:
     assert response.status_code == 201
     assert fetched.headers["content-type"] == "image/webp"
     assert Image.open(io.BytesIO(fetched.content)).format == "WEBP"
+
+
+def test_upload_accepts_an_iphone_heic_photo(client: TestClient, upload_dir) -> None:
+    post_id = create_test_post(client).json()["id"]
+
+    response = upload_image(client, post_id, data=make_image("HEIF"))
+
+    assert response.status_code == 201
+    stored = next(upload_dir.iterdir())
+    assert Image.open(stored).format == "WEBP"
 
 
 def test_upload_removes_the_gps_location(client: TestClient, upload_dir) -> None:
