@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import MAX_IMAGE_BYTES
@@ -45,6 +45,7 @@ def list_posts(
     cuisine: str | None = None,
     min_rating: int | None = Query(default=None, ge=1, le=5),
     item: str | None = None,
+    q: str | None = Query(default=None, min_length=1, max_length=100),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=10, ge=1, le=100),
     current_user: User = Depends(get_current_user),
@@ -63,6 +64,17 @@ def list_posts(
 
     if item is not None:
         statement = statement.where(Post.items.contains([item]))
+
+    if q is not None:
+        # Matches the restaurant's name, city or cuisine, ignoring capitals and matching part of a word.
+        pattern = f"%{q.strip()}%"
+        statement = statement.where(
+            or_(
+                Restaurant.name.ilike(pattern),
+                Restaurant.city.ilike(pattern),
+                Restaurant.cuisine.ilike(pattern),
+            )
+        )
 
     result = db.scalars(
         statement.order_by(desc(Post.created_at)).offset(skip).limit(limit)

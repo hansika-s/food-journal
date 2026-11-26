@@ -176,7 +176,8 @@ export interface paths {
         delete: operations["delete_user_account_api_users_me_delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Profile */
+        patch: operations["update_profile_api_users_me_patch"];
         trace?: never;
     };
     "/api/places/autocomplete": {
@@ -352,6 +353,15 @@ export interface components {
             items?: string[] | null;
             /** Notes */
             notes?: string | null;
+        };
+        /** ProfileUpdate */
+        ProfileUpdate: {
+            /** Name */
+            name?: string | null;
+            /** New Password */
+            new_password?: string | null;
+            /** Current Password */
+            current_password?: string | null;
         };
         /** RefreshTokenRequest */
         RefreshTokenRequest: {
@@ -954,6 +964,43 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_profile_api_users_me_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

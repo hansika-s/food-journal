@@ -60,3 +60,35 @@ def test_delete_user_account_keeps_other_users_posts(client: TestClient, logged_
     client.request("DELETE", "/api/users/me", json={"password": user_data["password"]})
 
     assert len(client.get("/api/posts", headers=other_headers).json()) == 1
+
+
+
+
+def update_profile(client: TestClient, **changes):
+    return client.patch("/api/users/me", json=changes)
+
+
+def test_change_name_needs_no_password(client: TestClient, logged_in: None) -> None:
+    response = update_profile(client, name="Renamed")
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "Renamed"
+
+
+def test_change_password_rejects_wrong_current_password(client: TestClient, logged_in: None) -> None:
+    assert update_profile(client, new_password="a-new-password", current_password="wrong-password").status_code == 403
+
+
+def test_change_password_needs_the_current_password(client: TestClient, logged_in: None) -> None:
+    assert update_profile(client, new_password="a-new-password").status_code == 403
+
+
+def test_new_password_works_and_the_old_one_does_not(client: TestClient, logged_in: None, user_data: dict[str, str]) -> None:
+    assert update_profile(client, new_password="a-new-password", current_password=user_data["password"]).status_code == 200
+
+    assert client.post("/api/auth/login", json={"email": user_data["email"], "password": "a-new-password"}).status_code == 200
+    assert client.post("/api/auth/login", json={"email": user_data["email"], "password": user_data["password"]}).status_code == 401
+
+
+def test_new_password_must_be_at_least_8_characters(client: TestClient, logged_in: None, user_data: dict[str, str]) -> None:
+    assert update_profile(client, new_password="short", current_password=user_data["password"]).status_code == 422

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { client, getCsrfToken } from './client'
 import type { components } from './schema'
 
@@ -8,15 +8,29 @@ export type PostChanges = components['schemas']['PostUpdate']
 
 export const postsKey = ['posts'] as const
 
-// The list of the user's posts, newest first.
-export function usePosts() {
-  return useQuery({
-    queryKey: postsKey,
-    queryFn: async () => {
-      const { data, response } = await client.GET('/api/posts')
+export const PAGE_SIZE = 10
+
+export type PostFilters = {
+  // Show only posts rated at least this much.
+  minRating?: number
+  // Matches the restaurant's name, city or cuisine.
+  search?: string
+}
+
+// The user's posts, newest first, a page at a time. "Load more" asks for the next page.
+export function usePosts(filters: PostFilters) {
+  return useInfiniteQuery({
+    queryKey: [...postsKey, filters],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam, signal }) => {
+      const { data, response } = await client.GET('/api/posts', {
+        params: { query: { min_rating: filters.minRating, q: filters.search, skip: pageParam, limit: PAGE_SIZE } },
+        signal,
+      })
       if (!data) throw new Error(`Could not load posts (${response.status})`)
       return data
     },
+    getNextPageParam: (lastPage, pages) => (lastPage.length === PAGE_SIZE ? pages.length * PAGE_SIZE : undefined),
   })
 }
 

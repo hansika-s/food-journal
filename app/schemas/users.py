@@ -43,3 +43,10 @@ class RefreshTokenRequest(BaseModel):
 
 class DeleteAccountRequest(BaseModel):
     password: str
+
+
+# The name can change on its own. A new password needs the current password.
+class ProfileUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1)
+    new_password: str | None = Field(default=None, min_length=8)
+    current_password: str | None = None

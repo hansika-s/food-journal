@@ -351,3 +351,14 @@ def test_deleting_a_post_removes_its_image_files(client: TestClient, upload_dir)
     client.delete(f"/api/posts/{post_id}")
 
     assert list(upload_dir.iterdir()) == []
+
+
+
+def test_list_posts_searches_name_city_and_cuisine(client: TestClient) -> None:
+    create_test_post(client)
+    client.post("/api/posts", json={**POST_BODY, "restaurant_name": "Sushi Bar", "city": "Hamburg", "cuisine": "Sushi"})
+
+    assert [post["restaurant"]["name"] for post in client.get("/api/posts", params={"q": "ramen"}).json()] == ["Ramen Nagi"]
+    assert [post["restaurant"]["name"] for post in client.get("/api/posts", params={"q": "hamburg"}).json()] == ["Sushi Bar"]
+    assert [post["restaurant"]["name"] for post in client.get("/api/posts", params={"q": "JAPAN"}).json()] == ["Ramen Nagi"]
+    assert client.get("/api/posts", params={"q": "pizza"}).json() == []
