@@ -1,8 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
-import { AccountBar } from './components/AccountBar'
-import { Logo } from './components/Logo'
+import { Header } from './components/Header'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
+import { ProfilePage } from './pages/ProfilePage'
 import { SignupPage } from './pages/SignupPage'
 
 // "/" is the home page, "/login" is the login page. Any other address goes home.
@@ -10,14 +10,12 @@ import { SignupPage } from './pages/SignupPage'
 function App() {
   return (
     <BrowserRouter>
-      <header className="mb-6 flex items-start justify-between gap-4">
-        <Logo />
-        <AccountBar />
-      </header>
+      <Header />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
